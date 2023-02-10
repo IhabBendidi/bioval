@@ -1,16 +1,18 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.models as models
+import numpy as np
 
 
 """
 Necessary modifications to the original code:
-Modify the distance matrix shape to (d,d)
+Modify the distance matrix shape to (d,d) - Done
 adapt the topkmatching depending on some rules of the numbers of classes
 adapt the topKdistance to work on images too by importing an inception model and running it on it
 ajouter le distribué
 
-Input shape : ('batch size', 'number of classes', 'number of features')
+Input shape : ('number of classes', 'batch size', 'number of features')
 """
 
 
@@ -91,18 +93,39 @@ class TopKDistance:
         >>> top_k_distance(arr1, arr2)
         {'top1': 100.0, 'top5': 100.0, 'top10': 100.0}
         """
-        # check if method and aggregate attributes are valid
+        # check if arr1 and arr2 are tensors of the same shape and raise error if not
+        if isinstance(arr1, np.ndarray):
+            arr1 = torch.tensor(arr1)
+        if isinstance(arr2, np.ndarray):
+            arr2 = torch.tensor(arr2)
+        if not isinstance(arr1, torch.Tensor):
+            raise TypeError(f"First tensor should be a torch.Tensor but got {type(arr1)}")
+        if not isinstance(arr2, torch.Tensor):
+            raise TypeError(f"Second tensor should be a torch.Tensor but got {type(arr2)}")
+        # control if the tensors have the same shape for the 0 dimension
+        if arr1.shape[0] != arr2.shape[0]:
+            raise ValueError(f"First tensor and second tensor should have the same number of classes in dimension 0 but got {arr1.shape[0]} and {arr2.shape[0]} respectively")
+        # check if arr1 and arr2 are 2D or 3D or 4D or 5D tensors and raise error if not
+        if arr1.ndim not in [2, 3,4,5]:
+            raise ValueError(f"First tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr1.ndim}D tensor")
+        if arr2.ndim not in [2, 3,4,5]:
+            raise ValueError(f"Second tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr2.ndim}D tensor")
+
+
+
+
+        # here the code for inception model
+
+        # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
+        if arr1.ndim in [2, 3] and arr2.ndim in [2, 3] and arr1.shape[-1] != arr2.shape[-1]:
+            raise ValueError(f"First tensor and second tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {arr2.shape[-1]} respectively")
+                # check if method and aggregate attributes are valid
         if self.method not in self._methods:
             raise ValueError(f"{self.method} not in list of defined methods. Please choose from {list(self._methods.keys())}")
         if self.aggregate not in self._aggregs:
             raise ValueError(f"{self.aggregate} not in list of defined aggregations. Please choose from {list(self._aggregs.keys())}")
         
-        # check if arr1 and arr2 are 2D or 3D tensors and raise error if not
-        if arr1.ndim not in [2, 3]:
-            raise ValueError(f"arr1 should be a 2D or 3D tensor, but got {arr1.ndim}D tensor")
-        if arr2.ndim not in [2, 3]:
-            raise ValueError(f"arr2 should be a 2D or 3D tensor, but got {arr2.ndim}D tensor")
-
+        
         # aggregate the arrays if they are 3D tensors
         if arr1.ndim == 3:
             arr1 = self._aggregs[self.aggregate](arr1)
@@ -156,6 +179,37 @@ class TopKDistance:
             ranks[i] = (indices[:, i] == i).nonzero()[0].item() + 1  # to have index starting at 1
 
         return ranks
+
+    @staticmethod
+    def _extract_inception_embeddings(images: torch.Tensor)  -> torch.Tensor:
+        # Load the pre-trained Inception model
+        inception = models.inception_v3(pretrained=True)
+        # Set the model to evaluation mode
+        inception.eval()
+
+        # Convert images to a tensor
+        if len(images.shape) == 5:
+            # case when input is ('number of classes','number of images in classes', 'channels', 'height','width')
+            images = images.view(-1, images.shape[2], images.shape[3], images.shape[4])
+        else:
+            raise ValueError("Input image shape should be either 5 or 4 dimensional")
+
+        # Forward pass the images through the model
+        with torch.no_grad():
+            embeddings = inception(images).detach().numpy()
+
+        if len(images.shape) == 5:
+            embeddings = embeddings.reshape(images.shape[0], images.shape[1], -1)
+        elif len(images.shape) == 4:
+            embeddings = embeddings.reshape(images.shape[0], -1)
+        
+        # convert to torch tensor
+        embeddings = torch.tensor(embeddings)
+
+        return embeddings
+
+
+
 
 
 
@@ -215,7 +269,10 @@ if __name__ == '__main__':
     topk = TopKDistance()
     arr1 = torch.randn(100, 10)
     arr2 = torch.randn(100, 10)
-    # convert to float values
-    arr1 = arr1.float()
-    arr2 = arr2.float()
+
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+    # repreat test on 3D tensors
+    arr1 = torch.randn(100, 10, 10)
+    arr2 = torch.randn(100, 10, 10)
+    print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+
