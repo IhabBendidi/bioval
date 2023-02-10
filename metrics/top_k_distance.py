@@ -3,16 +3,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 import numpy as np
+import torchvision.transforms as transforms
+from PIL import Image
 
 
 """
 Necessary modifications to the original code:
 Modify the distance matrix shape to (d,d) - Done
+adapt the topKdistance to work on images too by importing an inception model and running it on it - Done
+Rewrite the documentation of each function and class
 adapt the topkmatching depending on some rules of the numbers of classes
-adapt the topKdistance to work on images too by importing an inception model and running it on it
 ajouter le distribué
-
-Input shape : ('number of classes', 'batch size', 'number of features')
+fuse with Interclass metric
+Give the ability to choose cpu or gpu and which gpu exactly, and perform computations on the gpu
+Multiprocessing?
 """
 
 
@@ -110,11 +114,23 @@ class TopKDistance:
             raise ValueError(f"First tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr1.ndim}D tensor")
         if arr2.ndim not in [2, 3,4,5]:
             raise ValueError(f"Second tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr2.ndim}D tensor")
+        # check if both arrays are on the same device
+        if arr1.device != arr2.device:
+            raise ValueError(f"First tensor and second tensor should be on the same device but got {arr1.device} and {arr2.device} respectively")
+        # get device of the tensors
+        
 
 
 
 
         # here the code for inception model
+        if arr1.ndim in [4,5] :
+            # call inception function
+            arr1 = self._extract_inception_embeddings(arr1)
+        if arr2.ndim in [4,5] :
+            # call inception function
+            arr2 = self._extract_inception_embeddings(arr2)
+            
 
         # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
         if arr1.ndim in [2, 3] and arr2.ndim in [2, 3] and arr1.shape[-1] != arr2.shape[-1]:
@@ -180,32 +196,45 @@ class TopKDistance:
 
         return ranks
 
+    # TODO : It might be more optimized to create an inception object and use it for all the images and arrays
+    # the inception object would be created in the __init__ method and each time affected to the specific device of the used array
+
     @staticmethod
     def _extract_inception_embeddings(images: torch.Tensor)  -> torch.Tensor:
         # Load the pre-trained Inception model
         inception = models.inception_v3(pretrained=True)
+        #
         # Set the model to evaluation mode
         inception.eval()
-
+        transform = transforms.Compose([    
+            transforms.Resize(299),    
+            transforms.CenterCrop(299),    
+            transforms.ToTensor(),    
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
         # Convert images to a tensor
         if len(images.shape) == 5:
-            # case when input is ('number of classes','number of images in classes', 'channels', 'height','width')
-            images = images.view(-1, images.shape[2], images.shape[3], images.shape[4])
+            # case when input is ('number of classes','number of images in classes', 'height','width', 'channels')
+            images = images.view(-1, images.shape[2], images.shape[3], images.shape[4])          
+        elif len(images.shape) == 4:
+            # case when input is ('number of classes', 'height','width', 'channels')
+            pass
         else:
             raise ValueError("Input image shape should be either 5 or 4 dimensional")
-
+        images = images.numpy()
+        
+        images = images.astype('uint8')
+        images = [Image.fromarray(image) for image in images]
+        images = torch.stack([transform(image) for image in images])
         # Forward pass the images through the model
         with torch.no_grad():
             embeddings = inception(images).detach().numpy()
-
         if len(images.shape) == 5:
             embeddings = embeddings.reshape(images.shape[0], images.shape[1], -1)
         elif len(images.shape) == 4:
             embeddings = embeddings.reshape(images.shape[0], -1)
-        
         # convert to torch tensor
         embeddings = torch.tensor(embeddings)
-
         return embeddings
 
 
@@ -269,10 +298,26 @@ if __name__ == '__main__':
     topk = TopKDistance()
     arr1 = torch.randn(100, 10)
     arr2 = torch.randn(100, 10)
-
+    print("2D tensors")
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+
     # repreat test on 3D tensors
     arr1 = torch.randn(100, 10, 10)
     arr2 = torch.randn(100, 10, 10)
+    print("3D tensors")
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+
+    # test on 4D tensors
+
+    arr1 = torch.randn(100, 10, 10,3) * 256
+    arr2 = torch.randn(100, 10, 10, 3) * 256
+    print("4D tensors")
+    print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+
+    # test on 5D tensors
+    arr1 = torch.randn(100, 50, 10, 10, 3) * 256
+    arr2 = torch.randn(100, 50, 10, 10, 3) * 256
+    print("5D tensors")
+    print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+
 
