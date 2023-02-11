@@ -5,19 +5,10 @@ import torchvision.models as models
 import numpy as np
 import torchvision.transforms as transforms
 from PIL import Image
+import time
+import bioval.utils.gpu_manager as gpu_manager
 
 
-"""
-Necessary modifications to the original code:
-Modify the distance matrix shape to (d,d) - Done
-adapt the topKdistance to work on images too by importing an inception model and running it on it - Done
-Rewrite the documentation of each function and class
-adapt the topkmatching depending on some rules of the numbers of classes
-ajouter le distribué
-fuse with Interclass metric
-Give the ability to choose cpu or gpu and which gpu exactly, and perform computations on the gpu
-Multiprocessing?
-"""
 
 
 class TopKDistance:
@@ -64,6 +55,9 @@ class TopKDistance:
             'median': self._median,
             'robust_mean': self._robust_mean
         }
+        self.inception = models.inception_v3(pretrained=True)
+        # Set the model to evaluation mode
+        self.inception.eval()
 
 
     def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, k_range=[1, 5, 10]) -> dict:
@@ -199,13 +193,10 @@ class TopKDistance:
     # TODO : It might be more optimized to create an inception object and use it for all the images and arrays
     # the inception object would be created in the __init__ method and each time affected to the specific device of the used array
 
-    @staticmethod
-    def _extract_inception_embeddings(images: torch.Tensor)  -> torch.Tensor:
-        # Load the pre-trained Inception model
-        inception = models.inception_v3(pretrained=True)
-        #
-        # Set the model to evaluation mode
-        inception.eval()
+    
+    def _extract_inception_embeddings(self,images: torch.Tensor)  -> torch.Tensor:
+
+        
         transform = transforms.Compose([    
             transforms.Resize(299),    
             transforms.CenterCrop(299),    
@@ -221,20 +212,27 @@ class TopKDistance:
             pass
         else:
             raise ValueError("Input image shape should be either 5 or 4 dimensional")
+        # get the device of the images
+        device = images.device
+        # move the inception model to the same device as the images
+        self.inception.to(device)
+        # Transfer the images to cpu
+        images = images.cpu()
+        
         images = images.numpy()
         
         images = images.astype('uint8')
         images = [Image.fromarray(image) for image in images]
         images = torch.stack([transform(image) for image in images])
+        # transfer images to the device of the inception model
+        images = images.to(device)
         # Forward pass the images through the model
         with torch.no_grad():
-            embeddings = inception(images).detach().numpy()
+            embeddings = self.inception(images).detach()
         if len(images.shape) == 5:
             embeddings = embeddings.reshape(images.shape[0], images.shape[1], -1)
         elif len(images.shape) == 4:
             embeddings = embeddings.reshape(images.shape[0], -1)
-        # convert to torch tensor
-        embeddings = torch.tensor(embeddings)
         return embeddings
 
 
@@ -295,29 +293,84 @@ class TopKDistance:
 
 # test the class
 if __name__ == '__main__':
+    best_gpu = gpu_manager.get_best_gpu()
+    
     topk = TopKDistance()
+
+    # test on 2D tensors
     arr1 = torch.randn(100, 10)
     arr2 = torch.randn(100, 10)
     print("2D tensors")
+    start_time = time.time()
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+    print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
     # repreat test on 3D tensors
     arr1 = torch.randn(100, 10, 10)
     arr2 = torch.randn(100, 10, 10)
     print("3D tensors")
+    start_time = time.time()
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+    print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
     # test on 4D tensors
 
     arr1 = torch.randn(100, 10, 10,3) * 256
     arr2 = torch.randn(100, 10, 10, 3) * 256
-    print("4D tensors")
+    print("4D tensors on CPU")
+    start_time = time.time()
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+    print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
     # test on 5D tensors
-    arr1 = torch.randn(100, 50, 10, 10, 3) * 256
-    arr2 = torch.randn(100, 50, 10, 10, 3) * 256
-    print("5D tensors")
+    arr1 = torch.randn(100, 2, 10, 10, 3) * 256
+    arr2 = torch.randn(100, 2, 10, 10, 3) * 256
+    print("5D tensors on CPU")
+    start_time = time.time()
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+    print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+
+    if best_gpu is not None:
+        # test on 2D tensors
+        arr1 = torch.randn(100, 10)
+        arr2 = torch.randn(100, 10)
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("2D tensors on GPU")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+        # repreat test on 3D tensors
+        arr1 = torch.randn(100, 10, 10)
+        arr2 = torch.randn(100, 10, 10)
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("3D tensors on GPU")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+        arr1 = torch.randn(100, 10, 10,3) * 256
+        arr2 = torch.randn(100, 10, 10, 3) * 256
+        # pass the arrays to first gpu
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("4D tensors on GPU")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+        # test on 5D tensors
+        arr1 = torch.randn(100, 2, 10, 10, 3) * 256
+        arr2 = torch.randn(100, 2, 10, 10, 3) * 256
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("5D tensors on GPU")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
 
 

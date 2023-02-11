@@ -1,0 +1,12 @@
+- Rewrite the documentation of each function and class
+- adapt the topkmatching depending on some rules of the numbers of classes
+- Add a unittest for each function
+- Add pytorch and pytorch lightning integration tests
+- ajouter le distribué
+- merge with Interclass metric
+- Give the ability to choose cpu or gpu and which gpu exactly, and perform computations on the gpu
+- Multiprocessing? both cpu and gpu. It should be both adaptive to pytorch and PL multiprocessing, or do multiprocessing for acceleration on its own
+- Add an internal measure that keeps track of the time used for each time we compute the metric + parameters of the run linked. Make this activate only in DEBUG mode
+- Use poetry to manage the dependencies
+- Add wiki files that explain usage and eaxmples and docs of the code
+- Automate github actions to test automatically the code in containers after each push
