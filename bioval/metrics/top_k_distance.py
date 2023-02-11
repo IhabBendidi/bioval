@@ -89,7 +89,7 @@ class TopKDistance:
         >>> arr2 = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
         >>> top_k_distance = TopKDistance()
         >>> top_k_distance(arr1, arr2)
-        {'top1': 100.0, 'top5': 100.0, 'top10': 100.0}
+        {'top1': tensor(1.5000), 'top5': tensor(6.5000), 'mean_ranks': tensor(50.1375), 'exact_matching': tensor(0.)}
         """
         # check if arr1 and arr2 are tensors of the same shape and raise error if not
         if isinstance(arr1, np.ndarray):
@@ -111,8 +111,6 @@ class TopKDistance:
         # check if both arrays are on the same device
         if arr1.device != arr2.device:
             raise ValueError(f"First tensor and second tensor should be on the same device but got {arr1.device} and {arr2.device} respectively")
-        # get device of the tensors
-        
 
 
 
@@ -121,9 +119,11 @@ class TopKDistance:
         if arr1.ndim in [4,5] :
             # call inception function
             arr1 = self._extract_inception_embeddings(arr1)
+            print(arr1.shape)
         if arr2.ndim in [4,5] :
             # call inception function
             arr2 = self._extract_inception_embeddings(arr2)
+            print(arr2.shape)
             
 
         # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
@@ -135,7 +135,10 @@ class TopKDistance:
         if self.aggregate not in self._aggregs:
             raise ValueError(f"{self.aggregate} not in list of defined aggregations. Please choose from {list(self._aggregs.keys())}")
         
+        # Do the toprank filtering here TODO
+        #k_range = self._compute_number_of_classes(arr1.shape[0], k_range)
         
+
         # aggregate the arrays if they are 3D tensors
         if arr1.ndim == 3:
             arr1 = self._aggregs[self.aggregate](arr1)
@@ -143,6 +146,7 @@ class TopKDistance:
             arr2 = self._aggregs[self.aggregate](arr2)
         # get the matrix for comparison using the specified method
         matrix = self._methods[self.method](arr1, arr2)
+        print("matrix is ",matrix.shape)
 
         # compute the diagonal ranks of the comparison matrix
         ranks = self._compute_diag_ranks(matrix)
@@ -150,8 +154,11 @@ class TopKDistance:
         mean_ranks = torch.mean(ranks.float(), dim=0)
         dict_score = {}
         # compute the scores for each value in k_range
-        for k in k_range:
+        for k in k_range :#.keys():
+            #print("k is ",k)
+            #print("matrix.shape[0] is ",matrix.shape[0])
             number_values = matrix.shape[0] * (k/100)
+            #print("number_values is ",number_values)
             r = (ranks <= number_values).sum()
             r = (r/matrix.shape[0]) * 100
             dict_score['top'+str(k)] = r
@@ -190,10 +197,12 @@ class TopKDistance:
 
         return ranks
 
-    # TODO : It might be more optimized to create an inception object and use it for all the images and arrays
-    # the inception object would be created in the __init__ method and each time affected to the specific device of the used array
 
-    
+
+
+        
+
+
     def _extract_inception_embeddings(self,images: torch.Tensor)  -> torch.Tensor:
 
         
@@ -203,10 +212,12 @@ class TopKDistance:
             transforms.ToTensor(),    
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
+        original_shape = images.shape
         # Convert images to a tensor
         if len(images.shape) == 5:
+            
             # case when input is ('number of classes','number of images in classes', 'height','width', 'channels')
-            images = images.view(-1, images.shape[2], images.shape[3], images.shape[4])          
+            images = images.reshape(original_shape[0]*original_shape[1], images.shape[2], images.shape[3], images.shape[4])        
         elif len(images.shape) == 4:
             # case when input is ('number of classes', 'height','width', 'channels')
             pass
@@ -229,15 +240,37 @@ class TopKDistance:
         # Forward pass the images through the model
         with torch.no_grad():
             embeddings = self.inception(images).detach()
-        if len(images.shape) == 5:
-            embeddings = embeddings.reshape(images.shape[0], images.shape[1], -1)
-        elif len(images.shape) == 4:
+        if len(original_shape) == 5:
+            embeddings = embeddings.reshape(original_shape[0],original_shape[1],-1 )
+        elif len(original_shape) == 4:
             embeddings = embeddings.reshape(images.shape[0], -1)
         return embeddings
 
 
 
+    @staticmethod
+    def _compute_number_of_classes(total_classes, percentages):
+        if total_classes in range(11,99):
+             
+            out = [int(percentage * total_classes / 100) + 1 for percentage in percentages]
+            # keep only values lower than total_classes
+            out = [value if value < total_classes else None for value in out]
+            # make a dict with percentage as the key and number of classes as the value
+            out = dict(zip(percentages, out))
+            # delete from dictionaries all key value pairs with None as the value
+            out = {key: value for key, value in out.items() if value is not None}
+            return out
 
+        elif total_classes in range(1,10):
+            # make a dict with percentage as the key and number of classes as the value
+            return {1:1}
+        else: 
+            # make a dict with percentage as the key and number of classes as the value
+            out = [int(percentage * total_classes / 100) for percentage in percentages]
+            out = [value if value < total_classes else None for value in out]
+            out = dict(zip(percentages, out))
+            #out = {key: value for key, value in out.items() if value is not None}
+            return out
 
 
     @staticmethod
@@ -329,6 +362,7 @@ if __name__ == '__main__':
     start_time = time.time()
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
     print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+    
 
 
     if best_gpu is not None:
@@ -343,8 +377,8 @@ if __name__ == '__main__':
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
         # repreat test on 3D tensors
-        arr1 = torch.randn(100, 10, 10)
-        arr2 = torch.randn(100, 10, 10)
+        arr1 = torch.randn(110, 10, 10)
+        arr2 = torch.randn(110, 10, 10)
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         print("3D tensors on GPU")
@@ -352,8 +386,8 @@ if __name__ == '__main__':
         print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
-        arr1 = torch.randn(100, 10, 10,3) * 256
-        arr2 = torch.randn(100, 10, 10, 3) * 256
+        arr1 = torch.randn(110, 10, 10,3) * 256
+        arr2 = torch.randn(110, 10, 10, 3) * 256
         # pass the arrays to first gpu
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
@@ -363,8 +397,8 @@ if __name__ == '__main__':
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
         # test on 5D tensors
-        arr1 = torch.randn(100, 2, 10, 10, 3) * 256
-        arr2 = torch.randn(100, 2, 10, 10, 3) * 256
+        arr1 = torch.randn(110, 2, 10, 10, 3) * 256
+        arr2 = torch.randn(110, 2, 10, 10, 3) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         print("5D tensors on GPU")
@@ -372,5 +406,36 @@ if __name__ == '__main__':
         print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
+
+        # test on 5D tensors
+        arr1 = torch.randn(8, 2, 10, 10, 3) * 256
+        arr2 = torch.randn(8, 2, 10, 10, 3) * 256
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("5D tensors on GPU, 8 classes")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+        # test on 5D tensors
+        arr1 = torch.randn(50, 2, 10, 10, 3) * 256
+        arr2 = torch.randn(50, 2, 10, 10, 3) * 256
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("5D tensors on GPU, 50 classes")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+        # test on 5D tensors
+        arr1 = torch.randn(150, 2, 10, 10, 3) * 256
+        arr2 = torch.randn(150, 2, 10, 10, 3) * 256
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("5D tensors on GPU, 150 classes")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+    
 
 
