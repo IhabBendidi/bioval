@@ -4,7 +4,6 @@
 - Add pytorch and pytorch lightning integration tests
 - ajouter le distribué
 - merge with Interclass metric
-- Give the ability to choose cpu or gpu and which gpu exactly, and perform computations on the gpu
 - Multiprocessing? both cpu and gpu. It should be both adaptive to pytorch and PL multiprocessing, or do multiprocessing for acceleration on its own
 - Add an internal measure that keeps track of the time used for each time we compute the metric + parameters of the run linked. Make this activate only in DEBUG mode
 - Use poetry to manage the dependencies
