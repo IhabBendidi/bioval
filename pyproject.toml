@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "bioval"
+version = "0.1.0"
+description = "The bioval package provides a comprehensive and accessible platform for evaluating the performance of generative models in the field of deep learning. By offering a simple and intuitive interface, this library simplifies the process of analyzing results from natural image domains as well as high content screening in the context of drug discovery. Built specifically for usage with PyTorch and PyTorch Lightning, bioval is easily integrated into existing workflows and offers additional metrics adapted for the biological setting. This makes it an indispensable tool for researchers and practitioners in the field of machine learning and deep learning, who are focused on the development of generative models. With the support of numpy, torch, torchvision, Pillow, and nvidia-ml-py, bioval provides a robust and versatile solution for evaluating the results of generative models. Whether you are a senior researcher or a practitioner, bioval will provide you with a sophisticated and efficient means of evaluating your models, while also saving you time and effort in the process."
+authors = ["Ihab Bendidi <bendidiihab@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = ""
+torch = ""
+torchvision = ""
+Pillow = ""
+nvidia-ml-py = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
