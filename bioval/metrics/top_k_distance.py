@@ -40,8 +40,8 @@ class TopKDistance:
         A dictionary containing all the available methods for aggregating a 3D tensor into a 2D tensor.
     """
     def __init__(self, method: str = 'euclidean',aggregate: str = 'mean'):
-        self.method = method
-        self.aggregate = aggregate
+        self._method = method
+        self._aggregate = aggregate
         self._methods = {
             'euclidean': self._euclidean,
             'cosine': self._cosine,
@@ -58,29 +58,49 @@ class TopKDistance:
         self.inception = models.inception_v3(pretrained=True)
         # Set the model to evaluation mode
         self.inception.eval()
+        if self._method not in list(self._methods.keys()):
+            raise ValueError(f"Method {self._method} not available. Available methods are {list(self._methods.keys())}")
 
+        if self._aggregate not in list(self._aggregs.keys()):
+            raise ValueError(f"Aggregation method {self._aggregate} not available. Available aggregation methods are {list(self._aggregs.keys())}")
+
+    @property
+    def method(self):
+        return self._method
+
+    @method.setter
+    def method(self, value):
+        if value not in self._methods:
+            raise ValueError("Invalid method, choose from {}".format(self._methods))
+        self._method = value
+
+    @property
+    def aggregate(self):
+        return self._aggregate
+
+    @aggregate.setter
+    def aggregate(self, value):
+        if value not in self._aggregs:
+            raise ValueError("Invalid aggregation method, choose from {}".format(self._aggregs))
+        self._aggregate = value
 
     def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, k_range=[1, 5, 10]) -> dict:
         """
-        Computes top K distance between two tensors.
+        This function is used to compare two tensors and return a dictionary with the scores for each value in k_range. The comparison is performed based on the method and aggregation set for the class. The tensors should be either 2D or 3D tensors for embeddings, or 4D or 5D tensors for images.
 
-        Parameters
-        ----------
-        arr1 : torch.Tensor
-            The first tensor to be compared. It should be a 2D or 3D tensor.
+        The function checks the input tensors, raises an error if they are not torch.Tensors, or if they do not have the same number of classes or features, or if they are not on the same device.
 
-        arr2 : torch.Tensor
-            The second tensor to be compared. It should be a 2D or 3D tensor.
+        The function also checks the values of method and aggregate, raises an error if they are not in the list of defined methods or aggregations.
 
-        k_range : list, optional
-            A list of values representing the percentage of top K distance to be computed. The default value is
-            [1, 5, 10].
+        The function aggregates the tensors if they are 3D tensors, then it computes the comparison matrix using the specified method and computes the diagonal ranks of the comparison matrix. Finally, the function computes the scores for each value in k_range and returns a dictionary with the scores.
 
-        Returns
-        -------
-        dict
-            A dictionary containing the top K distances computed for the specified range of K. The keys are 'topK', where
-            K is the value from `k_range`. The values are the top K distances in float format computed for the specified value of K.
+        Parameters:
+            arr1 (torch.Tensor): The first tensor to be compared.
+            arr2 (torch.Tensor): The second tensor to be compared.
+            k_range (List[int]): A list of values for the range of k.
+
+        Returns:
+            dict: A dictionary with the scores for each value in k_range.
 
 
         Example
@@ -90,7 +110,7 @@ class TopKDistance:
         >>> top_k_distance = TopKDistance()
         >>> top_k_distance(arr1, arr2)
         {'top1': tensor(1.5000), 'top5': tensor(6.5000), 'mean_ranks': tensor(50.1375), 'exact_matching': tensor(0.)}
-        """
+        """   
         # check if arr1 and arr2 are tensors of the same shape and raise error if not
         if isinstance(arr1, np.ndarray):
             arr1 = torch.tensor(arr1)
@@ -100,6 +120,21 @@ class TopKDistance:
             raise TypeError(f"First tensor should be a torch.Tensor but got {type(arr1)}")
         if not isinstance(arr2, torch.Tensor):
             raise TypeError(f"Second tensor should be a torch.Tensor but got {type(arr2)}")
+        # check if arr1 and arr2 are floats, and convert to float if they are not
+        if arr1.dtype != torch.float:
+            # try to convert to float and if error, raise error that input should have float dtype
+            try:
+                arr1 = arr1.float()
+            except:
+                raise TypeError(f"First tensor should have float dtype but got {arr1.dtype}")
+        if arr2.dtype != torch.float:
+            # try to convert to float and if error, raise error that input should have float dtype
+            try:
+                arr2 = arr2.float()
+            except:
+                raise TypeError(f"Second tensor should have float dtype but got {arr2.dtype}")
+        if arr2.dtype != torch.float:
+            arr2 = arr2.float()
         # Check if the number of classes is greater than 1
         if arr1.shape[0] < 2:
             raise ValueError(f"First tensor should have at least 2 classes but got {arr1.shape[0]}")
@@ -113,19 +148,13 @@ class TopKDistance:
             raise ValueError(f"First tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr1.ndim}D tensor")
         if arr2.ndim not in [2, 3,4,5]:
             raise ValueError(f"Second tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr2.ndim}D tensor")
-        
         # check if number of classes if less than max value of k_range
         if arr1.shape[0] < max(k_range):
             # modify k_range to have only values less than number of classes
             k_range = [k for k in k_range if k <= arr1.shape[0]]
-
         # check if both arrays are on the same device
         if arr1.device != arr2.device:
             raise ValueError(f"First tensor and second tensor should be on the same device but got {arr1.device} and {arr2.device} respectively")
-
-
-
-
         # here the code for inception model
         if arr1.ndim in [4,5] :
             # call inception function
@@ -133,29 +162,21 @@ class TopKDistance:
         if arr2.ndim in [4,5] :
             # call inception function
             arr2 = self._extract_inception_embeddings(arr2)
-            
-
         # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
         if arr1.ndim in [2, 3] and arr2.ndim in [2, 3] and arr1.shape[-1] != arr2.shape[-1]:
             raise ValueError(f"First tensor and second tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {arr2.shape[-1]} respectively")
                 # check if method and aggregate attributes are valid
-        if self.method not in self._methods:
-            raise ValueError(f"{self.method} not in list of defined methods. Please choose from {list(self._methods.keys())}")
-        if self.aggregate not in self._aggregs:
-            raise ValueError(f"{self.aggregate} not in list of defined aggregations. Please choose from {list(self._aggregs.keys())}")
-        
-        # Do the toprank filtering here TODO
-        #k_range = self._compute_number_of_classes(arr1.shape[0], k_range)
-        
-
+        if self._method not in self._methods:
+            raise ValueError(f"{self._method} not in list of defined methods. Please choose from {list(self._methods.keys())}")
+        if self._aggregate not in self._aggregs:
+            raise ValueError(f"{self._aggregate} not in list of defined aggregations. Please choose from {list(self._aggregs.keys())}")
         # aggregate the arrays if they are 3D tensors
         if arr1.ndim == 3:
-            arr1 = self._aggregs[self.aggregate](arr1)
+            arr1 = self._aggregs[self._aggregate](arr1)
         if arr2.ndim == 3:
-            arr2 = self._aggregs[self.aggregate](arr2)
+            arr2 = self._aggregs[self._aggregate](arr2)
         # get the matrix for comparison using the specified method
-        matrix = self._methods[self.method](arr1, arr2)
-
+        matrix = self._methods[self._method](arr1, arr2)
         # compute the diagonal ranks of the comparison matrix
         ranks = self._compute_diag_ranks(matrix)
         # compute the scores for each value in k_range
@@ -173,6 +194,9 @@ class TopKDistance:
         r_exact = (ranks == 0).sum()
         dict_score['exact_matching'] = (r_exact/matrix.shape[0]) * 100
         return dict_score
+
+
+    
     @staticmethod
     def _compute_diag_ranks(matrix: torch.Tensor) -> torch.Tensor:
         """
@@ -209,6 +233,27 @@ class TopKDistance:
 
 
     def _extract_inception_embeddings(self,images: torch.Tensor)  -> torch.Tensor:
+        """
+        Extract Inception embeddings from a batch of images.
+
+        This function takes in a batch of images as a `torch.Tensor` and returns the embeddings generated
+        by the Inception model. The input image can either be of shape (number of classes, number of images in classes, height, width, channels) or (number of classes, height, width, channels).
+        The function performs the following steps:
+            1. Resizes and crops the images to 299x299.
+            2. Normalizes the images according to the mean and standard deviation specified.
+            3. Passes the images through the Inception model and extracts the embeddings.
+            4. Returns the embeddings with the original shape if input was 5 dimensional or reshaped if input was 4 dimensional.
+
+        Args:
+            images (torch.Tensor): A batch of images with shape (number of classes, number of images in classes, height, width, channels) or (number of classes, height, width, channels)
+
+        Returns:
+            torch.Tensor: The embeddings generated from the Inception model for the given batch of images.
+
+        Raises:
+            ValueError: If the input image shape is not 4 or 5 dimensional.
+
+        """
         transform = transforms.Compose([    
             transforms.Resize(299),    
             transforms.CenterCrop(299),    
@@ -248,26 +293,6 @@ class TopKDistance:
 
 
 
-    @staticmethod
-    def _compute_number_of_classes(total_classes, percentages):
-        if total_classes in range(11,99):
-            out = [int(percentage * total_classes / 100) + 1 for percentage in percentages]
-            # keep only values lower than total_classes
-            out = [value if value < total_classes else None for value in out]
-            # make a dict with percentage as the key and number of classes as the value
-            out = dict(zip(percentages, out))
-            # delete from dictionaries all key value pairs with None as the value
-            out = {key: value for key, value in out.items() if value is not None}
-            return out
-        elif total_classes in range(1,10):
-            # make a dict with percentage as the key and number of classes as the value
-            return {1:1}
-        else: 
-            # make a dict with percentage as the key and number of classes as the value
-            out = [int(percentage * total_classes / 100) for percentage in percentages]
-            out = [value if value < total_classes else None for value in out]
-            out = dict(zip(percentages, out))
-            return out
 
 
     @staticmethod
