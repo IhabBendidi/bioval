@@ -7,6 +7,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 import time
 import bioval.utils.gpu_manager as gpu_manager
+from scipy.stats import pearsonr
 
 
 
@@ -175,24 +176,11 @@ class TopKDistance:
             arr1 = self._aggregs[self._aggregate](arr1)
         if arr2.ndim == 3:
             arr2 = self._aggregs[self._aggregate](arr2)
-        # get the matrix for comparison using the specified method
-        matrix = self._methods[self._method](arr1, arr2)
-        # compute the diagonal ranks of the comparison matrix
-        ranks = self._compute_diag_ranks(matrix)
-        # compute the scores for each value in k_range
-        mean_ranks = torch.mean(ranks.float(), dim=0)
         dict_score = {}
-        # compute the scores for each value in k_range
-        for k in k_range :#.keys():
-            number_values = k 
-            r = (ranks <= number_values).sum()
-            r = (r/matrix.shape[0]) * 100
-            dict_score['top'+str(k)] = r
-        # add the mean ranks score to the dictionary
-        dict_score['mean_ranks'] = (mean_ranks/matrix.shape[0]) * 100
-        # add the exact matching score to the dictionary
-        r_exact = (ranks == 0).sum()
-        dict_score['exact_matching'] = (r_exact/matrix.shape[0]) * 100
+        #### Inter class metric
+        dict_score = self._compute_interclass_scores(arr1, arr2,dict_score)
+        #### Intra class metric
+        dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score)
         return dict_score
 
 
@@ -225,6 +213,59 @@ class TopKDistance:
             ranks[i] = (indices[:, i] == i).nonzero()[0].item() + 1  # to have index starting at 1
 
         return ranks
+
+
+    @staticmethod
+    def _compute_pearson_correlation(matrix_1, matrix_2):
+        # Compute the Pearson correlation between the entire vectors
+        correlation, p_value = pearsonr(matrix_1.cpu().numpy(), matrix_2.cpu().numpy())
+
+        # Return the vector-wise correlation and p-value
+        return correlation, p_value
+    
+
+    def _compute_interclass_scores(self,matrix_1: torch.Tensor, matrix_2: torch.Tensor,output : dict) -> dict:
+        #### Inter class metric
+        matrix_1 = self._methods[self._method](arr1, arr1)
+        matrix_2 = self._methods[self._method](arr2, arr2)
+        # delete the diagonal of each matrix
+        matrix_1 = matrix_1[~torch.eye(matrix_1.shape[0], dtype=bool)].view(matrix_1.shape[0], -1)
+        matrix_2 = matrix_2[~torch.eye(matrix_2.shape[0], dtype=bool)].view(matrix_2.shape[0], -1)
+
+        # flatten the matrices
+        matrix_1 = matrix_1.flatten()
+        matrix_2 = matrix_2.flatten()
+
+        # Compute correlations between the two matrices
+        corr,pvalue = self._compute_pearson_correlation(matrix_1, matrix_2)
+
+        # add the correlation score to the dictionary
+        output['interclass_correlation'] = corr
+        output['interclass_pvalue'] = pvalue
+        return output
+    
+    def _compute_intraclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,output : dict) -> dict:
+        # get the matrix for comparison using the specified method
+        matrix = self._methods[self._method](arr1, arr2)
+        # compute the diagonal ranks of the comparison matrix
+        ranks = self._compute_diag_ranks(matrix)
+        # compute the scores for each value in k_range
+        mean_ranks = torch.mean(ranks.float(), dim=0)
+        
+        # compute the scores for each value in k_range
+        for k in k_range :
+            number_values = k 
+            r = (ranks <= number_values).sum()
+            r = (r/matrix.shape[0]) * 100
+            output['top'+str(k)] = r
+        # add the mean ranks score to the dictionary
+        output['mean_ranks'] = (mean_ranks/matrix.shape[0]) * 100
+        # add the exact matching score to the dictionary
+        r_exact = (ranks == 0).sum()
+        output['exact_matching'] = (r_exact/matrix.shape[0]) * 100
+        return output
+        
+
 
 
 
