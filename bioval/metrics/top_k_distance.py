@@ -112,70 +112,7 @@ class TopKDistance:
         >>> top_k_distance(arr1, arr2)
         {'top1': tensor(1.5000), 'top5': tensor(6.5000), 'mean_ranks': tensor(50.1375), 'exact_matching': tensor(0.)}
         """   
-        # check if arr1 and arr2 are tensors of the same shape and raise error if not
-        if isinstance(arr1, np.ndarray):
-            arr1 = torch.tensor(arr1)
-        if isinstance(arr2, np.ndarray):
-            arr2 = torch.tensor(arr2)
-        if not isinstance(arr1, torch.Tensor):
-            raise TypeError(f"First tensor should be a torch.Tensor but got {type(arr1)}")
-        if not isinstance(arr2, torch.Tensor):
-            raise TypeError(f"Second tensor should be a torch.Tensor but got {type(arr2)}")
-        # check if arr1 and arr2 are floats, and convert to float if they are not
-        if arr1.dtype != torch.float:
-            # try to convert to float and if error, raise error that input should have float dtype
-            try:
-                arr1 = arr1.float()
-            except:
-                raise TypeError(f"First tensor should have float dtype but got {arr1.dtype}")
-        if arr2.dtype != torch.float:
-            # try to convert to float and if error, raise error that input should have float dtype
-            try:
-                arr2 = arr2.float()
-            except:
-                raise TypeError(f"Second tensor should have float dtype but got {arr2.dtype}")
-        if arr2.dtype != torch.float:
-            arr2 = arr2.float()
-        # Check if the number of classes is greater than 1
-        if arr1.shape[0] < 2:
-            raise ValueError(f"First tensor should have at least 2 classes but got {arr1.shape[0]}")
-        if arr2.shape[0] < 2:
-            raise ValueError(f"Second tensor should have at least 2 classes but got {arr2.shape[0]}")
-        # control if the tensors have the same shape for the 0 dimension
-        if arr1.shape[0] != arr2.shape[0]:
-            raise ValueError(f"First tensor and second tensor should have the same number of classes in dimension 0 but got {arr1.shape[0]} and {arr2.shape[0]} respectively")
-        # check if arr1 and arr2 are 2D or 3D or 4D or 5D tensors and raise error if not
-        if arr1.ndim not in [2, 3,4,5]:
-            raise ValueError(f"First tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr1.ndim}D tensor")
-        if arr2.ndim not in [2, 3,4,5]:
-            raise ValueError(f"Second tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr2.ndim}D tensor")
-        # check if number of classes if less than max value of k_range
-        if arr1.shape[0] < max(k_range):
-            # modify k_range to have only values less than number of classes
-            k_range = [k for k in k_range if k <= arr1.shape[0]]
-        # check if both arrays are on the same device
-        if arr1.device != arr2.device:
-            raise ValueError(f"First tensor and second tensor should be on the same device but got {arr1.device} and {arr2.device} respectively")
-        # here the code for inception model
-        if arr1.ndim in [4,5] :
-            # call inception function
-            arr1 = self._extract_inception_embeddings(arr1)
-        if arr2.ndim in [4,5] :
-            # call inception function
-            arr2 = self._extract_inception_embeddings(arr2)
-        # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
-        if arr1.ndim in [2, 3] and arr2.ndim in [2, 3] and arr1.shape[-1] != arr2.shape[-1]:
-            raise ValueError(f"First tensor and second tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {arr2.shape[-1]} respectively")
-                # check if method and aggregate attributes are valid
-        if self._method not in self._methods:
-            raise ValueError(f"{self._method} not in list of defined methods. Please choose from {list(self._methods.keys())}")
-        if self._aggregate not in self._aggregs:
-            raise ValueError(f"{self._aggregate} not in list of defined aggregations. Please choose from {list(self._aggregs.keys())}")
-        # aggregate the arrays if they are 3D tensors
-        if arr1.ndim == 3:
-            arr1 = self._aggregs[self._aggregate](arr1)
-        if arr2.ndim == 3:
-            arr2 = self._aggregs[self._aggregate](arr2)
+        arr1,arr2 = self._prepare_data_format(arr1, arr2,k_range)
         dict_score = {}
         #### Inter class metric
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score)
@@ -264,6 +201,73 @@ class TopKDistance:
         r_exact = (ranks == 0).sum()
         output['exact_matching'] = (r_exact/matrix.shape[0]) * 100
         return output
+    
+    def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list) -> tuple:
+        # check if arr1 and arr2 are tensors of the same shape and raise error if not
+        if isinstance(arr1, np.ndarray):
+            arr1 = torch.tensor(arr1)
+        if isinstance(arr2, np.ndarray):
+            arr2 = torch.tensor(arr2)
+        if not isinstance(arr1, torch.Tensor):
+            raise TypeError(f"First tensor should be a torch.Tensor but got {type(arr1)}")
+        if not isinstance(arr2, torch.Tensor):
+            raise TypeError(f"Second tensor should be a torch.Tensor but got {type(arr2)}")
+        # check if arr1 and arr2 are floats, and convert to float if they are not
+        if arr1.dtype != torch.float:
+            # try to convert to float and if error, raise error that input should have float dtype
+            try:
+                arr1 = arr1.float()
+            except:
+                raise TypeError(f"First tensor should have float dtype but got {arr1.dtype}")
+        if arr2.dtype != torch.float:
+            # try to convert to float and if error, raise error that input should have float dtype
+            try:
+                arr2 = arr2.float()
+            except:
+                raise TypeError(f"Second tensor should have float dtype but got {arr2.dtype}")
+        if arr2.dtype != torch.float:
+            arr2 = arr2.float()
+        # Check if the number of classes is greater than 1
+        if arr1.shape[0] < 2:
+            raise ValueError(f"First tensor should have at least 2 classes but got {arr1.shape[0]}")
+        if arr2.shape[0] < 2:
+            raise ValueError(f"Second tensor should have at least 2 classes but got {arr2.shape[0]}")
+        # control if the tensors have the same shape for the 0 dimension
+        if arr1.shape[0] != arr2.shape[0]:
+            raise ValueError(f"First tensor and second tensor should have the same number of classes in dimension 0 but got {arr1.shape[0]} and {arr2.shape[0]} respectively")
+        # check if arr1 and arr2 are 2D or 3D or 4D or 5D tensors and raise error if not
+        if arr1.ndim not in [2, 3,4,5]:
+            raise ValueError(f"First tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr1.ndim}D tensor")
+        if arr2.ndim not in [2, 3,4,5]:
+            raise ValueError(f"Second tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr2.ndim}D tensor")
+        # check if number of classes if less than max value of k_range
+        if arr1.shape[0] < max(k_range):
+            # modify k_range to have only values less than number of classes
+            k_range = [k for k in k_range if k <= arr1.shape[0]]
+        # check if both arrays are on the same device
+        if arr1.device != arr2.device:
+            raise ValueError(f"First tensor and second tensor should be on the same device but got {arr1.device} and {arr2.device} respectively")
+        # here the code for inception model
+        if arr1.ndim in [4,5] :
+            # call inception function
+            arr1 = self._extract_inception_embeddings(arr1)
+        if arr2.ndim in [4,5] :
+            # call inception function
+            arr2 = self._extract_inception_embeddings(arr2)
+        # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
+        if arr1.ndim in [2, 3] and arr2.ndim in [2, 3] and arr1.shape[-1] != arr2.shape[-1]:
+            raise ValueError(f"First tensor and second tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {arr2.shape[-1]} respectively")
+                # check if method and aggregate attributes are valid
+        if self._method not in self._methods:
+            raise ValueError(f"{self._method} not in list of defined methods. Please choose from {list(self._methods.keys())}")
+        if self._aggregate not in self._aggregs:
+            raise ValueError(f"{self._aggregate} not in list of defined aggregations. Please choose from {list(self._aggregs.keys())}")
+        # aggregate the arrays if they are 3D tensors
+        if arr1.ndim == 3:
+            arr1 = self._aggregs[self._aggregate](arr1)
+        if arr2.ndim == 3:
+            arr2 = self._aggregs[self._aggregate](arr2)
+        return arr1,arr2
         
 
 
