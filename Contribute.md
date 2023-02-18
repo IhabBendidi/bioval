@@ -8,6 +8,6 @@
 - possibility to use the metric as a callback in PL
 - possibility to use the metric on a data subset only
 - Multiprocessing? both cpu and gpu. It should be both adaptive to pytorch and PL multiprocessing, or do multiprocessing for acceleration on its own
-- Add an internal measure that keeps track of the time used for each time we compute the metric + parameters of the run linked. Make this activate only in DEBUG mode
+
 - Add wiki files that explain usage and eaxmples and docs of the code
 - Automate github actions to test automatically the code in containers after each push

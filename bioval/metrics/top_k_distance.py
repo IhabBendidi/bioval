@@ -8,6 +8,7 @@ from PIL import Image
 import time
 import bioval.utils.gpu_manager as gpu_manager
 import bioval.utils.distance as distance
+import bioval.utils.aggregation as aggregation
 
 from scipy.stats import pearsonr
 
@@ -46,11 +47,7 @@ class TopKDistance:
         self._method = method
         self._aggregate = aggregate
         self._methods = distance.get_distance_functions()
-        self._aggregs = {
-            'mean': self._mean,
-            'median': self._median,
-            'robust_mean': self._robust_mean
-        }
+        self._aggregs = aggregation.get_aggregation_functions()
         self.inception = models.inception_v3(pretrained=True)
         # Set the model to evaluation mode
         self.inception.eval()
@@ -378,57 +375,10 @@ class TopKDistance:
 
 
 
-    @staticmethod
-    def _euclidean(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        return torch.norm(arr1[:, None, :] - arr2[None, :, :], p=2, dim=-1)
-
-    @staticmethod
-    def _cosine(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        return 1 - F.cosine_similarity(arr1[:, None, :], arr2[None, :, :], dim=-1)
-
-    @staticmethod
-    def _correlation(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        mean1 = torch.mean(arr1, dim=-1, keepdim=True)
-        mean2 = torch.mean(arr2, dim=-1, keepdim=True)
-        centered1 = arr1 - mean1
-        centered2 = arr2 - mean2
-        return 1 - torch.sum(centered1[:, None, :] * centered2[None, :, :], dim=-1) / torch.norm(centered1, p=2, dim=-1) / torch.norm(centered2, p=2, dim=-1)
-
-    @staticmethod
-    def _chebyshev(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        return torch.max(torch.abs(arr1[:, None, :] - arr2[None, :, :]), dim=-1)[0]
-
-    @staticmethod
-    def _minkowski(arr1: torch.Tensor, arr2: torch.Tensor, p: float = 3) -> torch.Tensor:
-        return torch.norm(arr1[:, None, :] - arr2[None, :, :], p=p, dim=-1)
-
-    @staticmethod
-    def _cityblock(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        return torch.sum(torch.abs(arr1[:, None, :] - arr2[None, :, :]), dim=-1)
 
 
 
-    @staticmethod
-    def _mean(emb: torch.Tensor) -> torch.Tensor:
-        if emb.ndim == 3:
-            return torch.mean(emb, dim=1)
-        else:
-            return emb
-    @staticmethod
-    def _median(emb: torch.Tensor) -> torch.Tensor:
-        if emb.ndim == 3:
-            return torch.median(emb, dim=1)[0]
-        else:
-            return emb
-    @staticmethod
-    def _robust_mean(emb: torch.Tensor) -> torch.Tensor:
-        if emb.ndim == 3:
-            log_embeddings = torch.log(emb + 1e-8)
-            avg_log_embeddings = torch.mean(log_embeddings, dim=1)
-            return torch.exp(avg_log_embeddings)
-        else:
-            return emb
-
+    
 # test the class
 if __name__ == '__main__':
     best_gpu = gpu_manager.get_available_gpu()

@@ -1,6 +1,6 @@
 import torch 
 
-# TODO : Make this adaptable to choice of aggregated or distributional representation
+# TODO : Make this adaptable to choice of aggregated or distributional representation? Not sure if this is the best spot for this.
 def get_distance_functions() -> dict:
     methods = {
             'euclidean': euclidean,
