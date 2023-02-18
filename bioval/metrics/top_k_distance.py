@@ -7,6 +7,8 @@ import torchvision.transforms as transforms
 from PIL import Image
 import time
 import bioval.utils.gpu_manager as gpu_manager
+import bioval.utils.distance as distance
+
 from scipy.stats import pearsonr
 
 
@@ -43,14 +45,7 @@ class TopKDistance:
     def __init__(self, method: str = 'euclidean',aggregate: str = 'mean'):
         self._method = method
         self._aggregate = aggregate
-        self._methods = {
-            'euclidean': self._euclidean,
-            'cosine': self._cosine,
-            'correlation': self._correlation,
-            'chebyshev': self._chebyshev,
-            'minkowski': self._minkowski,
-            'cityblock': self._cityblock
-        }
+        self._methods = distance.get_distance_functions()
         self._aggregs = {
             'mean': self._mean,
             'median': self._median,
@@ -67,20 +62,49 @@ class TopKDistance:
 
     @property
     def method(self):
+        """
+        Get the value of the 'method' property.
+        Returns:
+                str: The comparison method to be used for calculating the distance between arrays.
+        """
         return self._method
 
     @method.setter
     def method(self, value):
+        """
+        Set the value of the 'method' property.
+
+        Args:
+            value (str): The comparison method to be used for calculating the distance between arrays.
+
+        Raises:
+            ValueError: If the value provided for 'method' is not in the list of valid methods.
+        """
         if value not in self._methods:
             raise ValueError("Invalid method, choose from {}".format(self._methods))
         self._method = value
 
     @property
     def aggregate(self):
+        """
+        Get the value of the 'aggregate' property.
+
+        Returns:
+            str: The aggregation method to be used to convert 3D tensors to 2D tensors.
+        """
         return self._aggregate
 
     @aggregate.setter
     def aggregate(self, value):
+        """
+        Set the value of the 'aggregate' property.
+
+        Args:
+            value (str): The aggregation method to be used to convert 3D tensors to 2D tensors.
+
+        Raises:
+            ValueError: If the value provided for 'aggregate' is not in the list of valid aggregations.
+        """
         if value not in self._aggregs:
             raise ValueError("Invalid aggregation method, choose from {}".format(self._aggregs))
         self._aggregate = value
@@ -112,6 +136,7 @@ class TopKDistance:
         >>> top_k_distance(arr1, arr2)
         {'top1': tensor(1.5000), 'top5': tensor(6.5000), 'mean_ranks': tensor(50.1375), 'exact_matching': tensor(0.)}
         """   
+        # check if format is correct and prepare data if its in image format
         arr1,arr2 = self._prepare_data_format(arr1, arr2,k_range)
         dict_score = {}
         #### Inter class metric
@@ -154,6 +179,19 @@ class TopKDistance:
 
     @staticmethod
     def _compute_pearson_correlation(matrix_1, matrix_2):
+        """
+        Calculates the Pearson correlation coefficient and the p-value between two matrices.
+
+        Args:
+            matrix_1 (torch.Tensor): First input matrix.
+            matrix_2 (torch.Tensor): Second input matrix.
+
+        Returns:
+            A tuple containing the Pearson correlation coefficient (float) and the p-value (float) between the two matrices.
+
+        Raises:
+            TypeError: If either matrix_1 or matrix_2 is not a PyTorch Tensor.
+        """
         # Compute the Pearson correlation between the entire vectors
         correlation, p_value = pearsonr(matrix_1.cpu().numpy(), matrix_2.cpu().numpy())
 
@@ -177,8 +215,8 @@ class TopKDistance:
         corr,pvalue = self._compute_pearson_correlation(matrix_1, matrix_2)
 
         # add the correlation score to the dictionary
-        output['interclass_correlation'] = corr
-        output['interclass_pvalue'] = pvalue
+        output['inter_corr'] = corr
+        output['inter_p'] = pvalue
         return output
     
     def _compute_intraclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,output : dict) -> dict:
@@ -194,7 +232,7 @@ class TopKDistance:
             number_values = k 
             r = (ranks <= number_values).sum()
             r = (r/matrix.shape[0]) * 100
-            output['top'+str(k)] = r
+            output['intra_top'+str(k)] = r
         # add the mean ranks score to the dictionary
         output['mean_ranks'] = (mean_ranks/matrix.shape[0]) * 100
         # add the exact matching score to the dictionary
