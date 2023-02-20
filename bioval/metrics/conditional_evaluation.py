@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.models as models
 import numpy as np
 import torchvision.transforms as transforms
@@ -15,7 +14,8 @@ from scipy.stats import pearsonr
 
 
 
-class TopKDistance:
+
+class ConditionalEvaluation():
     """
     This class computes top K distance between two tensors.
 
@@ -196,7 +196,23 @@ class TopKDistance:
         return correlation, p_value
     
 
-    def _compute_interclass_scores(self,matrix_1: torch.Tensor, matrix_2: torch.Tensor,output : dict) -> dict:
+    def _compute_interclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict) -> dict:
+        """
+        Computes the interclass scores of two matrices using the specified comparison method.
+        Interclass metric is a metric that allows the comparison of classes of two different sets or matrices. 
+
+        Args:
+        - matrix_1: a tensor of shape (num_samples_1, num_features) representing the first matrix
+        - matrix_2: a tensor of shape (num_samples_2, num_features) representing the second matrix
+        - output: a dictionary containing the scores of comparison. 
+
+        Returns:
+        A dictionary containing the correlation score and the p-value score of the interclass metric comparison.
+
+        Raises:
+        - ValueError: if any of the matrices does not have a valid shape or if the comparison method is not valid.
+
+        """
         #### Inter class metric
         matrix_1 = self._methods[self._method](arr1, arr1)
         matrix_2 = self._methods[self._method](arr2, arr2)
@@ -383,7 +399,7 @@ class TopKDistance:
 if __name__ == '__main__':
     best_gpu = gpu_manager.get_available_gpu()
     
-    topk = TopKDistance()
+    topk = ConditionalEvaluation()
 
     # test on 2D tensors
     arr1 = torch.randn(100, 10)

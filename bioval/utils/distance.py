@@ -1,4 +1,5 @@
 import torch 
+import torch.nn.functional as F
 
 # TODO : Make this adaptable to choice of aggregated or distributional representation? Not sure if this is the best spot for this.
 def get_distance_functions() -> dict:
