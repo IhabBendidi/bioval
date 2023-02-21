@@ -125,13 +125,7 @@ class ConditionalEvaluation():
             dict: A dictionary with the scores for each value in k_range.
 
 
-        Example
-        -------
-        >>> arr1 = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
-        >>> arr2 = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
-        >>> top_k_distance = TopKDistance()
-        >>> top_k_distance(arr1, arr2)
-        {'top1': tensor(1.5000), 'top5': tensor(6.5000), 'mean_ranks': tensor(50.1375), 'exact_matching': tensor(0.)}
+
         """   
         # check if format is correct and prepare data if its in image format
         arr1,arr2 = self._prepare_data_format(arr1, arr2,k_range)
@@ -141,59 +135,6 @@ class ConditionalEvaluation():
         #### Intra class metric
         dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score)
         return dict_score
-
-
-    
-    @staticmethod
-    def _compute_diag_ranks(matrix: torch.Tensor) -> torch.Tensor:
-        """
-        Computes the diagonal ranks of a given matrix.
-
-        Parameters:
-        matrix (torch.Tensor): 2D tensor of similarity scores between two arrays.
-
-        Returns:
-        torch.Tensor: 1D tensor of ranks of the diagonal elements in the input matrix. 
-                    Ranks start from 1, with 1 being the highest score.
-
-        Example:
-        >>> matrix = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
-        >>> _compute_diag_ranks(matrix)
-        tensor([1, 3, 2])
-        """
-        # Sort matrix in descending order along each column
-        _, indices = torch.sort(matrix, dim=0, descending=True)
-
-        # Initialize ranks tensor with zeros
-        ranks = torch.zeros(matrix.shape[0], dtype=torch.int64)
-
-        # Compute the rank of each diagonal element by finding its index
-        for i in range(matrix.shape[0]):
-            ranks[i] = (indices[:, i] == i).nonzero()[0].item() + 1  # to have index starting at 1
-
-        return ranks
-
-
-    @staticmethod
-    def _compute_pearson_correlation(matrix_1, matrix_2):
-        """
-        Calculates the Pearson correlation coefficient and the p-value between two matrices.
-
-        Args:
-            matrix_1 (torch.Tensor): First input matrix.
-            matrix_2 (torch.Tensor): Second input matrix.
-
-        Returns:
-            A tuple containing the Pearson correlation coefficient (float) and the p-value (float) between the two matrices.
-
-        Raises:
-            TypeError: If either matrix_1 or matrix_2 is not a PyTorch Tensor.
-        """
-        # Compute the Pearson correlation between the entire vectors
-        correlation, p_value = pearsonr(matrix_1.cpu().numpy(), matrix_2.cpu().numpy())
-
-        # Return the vector-wise correlation and p-value
-        return correlation, p_value
     
 
     def _compute_interclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict) -> dict:
@@ -216,6 +157,8 @@ class ConditionalEvaluation():
         #### Inter class metric
         matrix_1 = self._methods[self._method](arr1, arr1)
         matrix_2 = self._methods[self._method](arr2, arr2)
+        print(matrix_1)
+        print(matrix_2)
         # delete the diagonal of each matrix
         matrix_1 = matrix_1[~torch.eye(matrix_1.shape[0], dtype=bool)].view(matrix_1.shape[0], -1)
         matrix_2 = matrix_2[~torch.eye(matrix_2.shape[0], dtype=bool)].view(matrix_2.shape[0], -1)
@@ -233,6 +176,23 @@ class ConditionalEvaluation():
         return output
     
     def _compute_intraclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,output : dict) -> dict:
+        """
+        Computes various evaluation metrics for comparing two given tensors. The function takes two tensor inputs 
+        arr1 and arr2, a list of integer values k_range, and a dictionary output and returns a dictionary with 
+        evaluation scores. The function computes intraclass scores for the input tensors by computing the diagonal 
+        ranks of the comparison matrix between the tensors, and then calculates the mean ranks, top-k, 
+        and exact matching scores.
+
+        Parameters:
+
+        arr1: A tensor representing the first set of embeddings or images.
+        arr2: A tensor representing the second set of embeddings or images.
+        k_range: A list of integer values representing the number of top-k scores to be computed.
+        output: A dictionary containing the results of the evaluation metrics computed by the function.
+        Returns:
+
+        output: A dictionary containing the results of the evaluation metrics computed by the function.
+        """
         # get the matrix for comparison using the specified method
         matrix = self._methods[self._method](arr1, arr2)
         # compute the diagonal ranks of the comparison matrix
@@ -254,6 +214,28 @@ class ConditionalEvaluation():
         return output
     
     def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list) -> tuple:
+
+        """
+        Prforms input validation, and normalization of the input data before using it to calculate similarity 
+        scores between two tensors. It prepares and formats the input tensors to make sure they are in a valid format, 
+        on the same device, and ready for similarity scoring.
+
+        Parameters:
+        arr1: A torch.Tensor object of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where C is the number of channels, 
+        H is the height, and W is the width of the input image, and N is the number of classes, I the number of instances,
+        and F is the number of features.
+        arr2: A torch.Tensor object of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where C is the number of channels, 
+        H is the height, and W is the width of the input image, and N is the number of classes, I the number of instances,
+        and F is the number of features.
+        k_range: A list of integers that indicates the values of k in the top-k similarity scoring metric.
+        Returns:
+        A tuple containing two torch.Tensor objects that represent arr1 and arr2 after validation and normalization.
+        Raises:
+        TypeError: if any of arr1 and arr2 is not a torch.Tensor object, or they are not of the same device, or they don't have float dtype.
+        ValueError: if any of arr1 and arr2 have less than 2 classes, or they have different number of classes, or they don't have a valid number of dimensions, or the number of classes is less than the maximum value of k_range, or method or aggregate attributes are not valid.
+        AssertionError: if the returned objects are not of type tuple.
+
+        """
         # check if arr1 and arr2 are tensors of the same shape and raise error if not
         if isinstance(arr1, np.ndarray):
             arr1 = torch.tensor(arr1)
@@ -319,13 +301,6 @@ class ConditionalEvaluation():
         if arr2.ndim == 3:
             arr2 = self._aggregs[self._aggregate](arr2)
         return arr1,arr2
-        
-
-
-
-
-
-        
 
 
     def _extract_inception_embeddings(self,images: torch.Tensor)  -> torch.Tensor:
@@ -373,8 +348,8 @@ class ConditionalEvaluation():
         # Transfer the images to cpu
         images = images.cpu()
         images = images.numpy()
-        images = images.astype('uint8')
-        images = [Image.fromarray(image) for image in images]
+        images = images.astype(np.uint8)
+        images = [Image.fromarray(image.astype(np.uint8)) for image in images]
         images = torch.stack([transform(image) for image in images])
         # transfer images to the device of the inception model
         images = images.to(device)
@@ -386,6 +361,57 @@ class ConditionalEvaluation():
         elif len(original_shape) == 4:
             embeddings = embeddings.reshape(images.shape[0], -1)
         return embeddings
+    
+    @staticmethod
+    def _compute_diag_ranks(matrix: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the diagonal ranks of a given matrix.
+
+        Parameters:
+        matrix (torch.Tensor): 2D tensor of similarity scores between two arrays.
+
+        Returns:
+        torch.Tensor: 1D tensor of ranks of the diagonal elements in the input matrix. 
+                    Ranks start from 1, with 1 being the highest score.
+
+        Example:
+        >>> matrix = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
+        >>> _compute_diag_ranks(matrix)
+        tensor([1, 3, 2])
+        """
+        # Sort matrix in descending order along each column
+        _, indices = torch.sort(matrix, dim=0, descending=True)
+
+        # Initialize ranks tensor with zeros
+        ranks = torch.zeros(matrix.shape[0], dtype=torch.int64)
+
+        # Compute the rank of each diagonal element by finding its index
+        for i in range(matrix.shape[0]):
+            ranks[i] = (indices[:, i] == i).nonzero()[0].item() + 1  # to have index starting at 1
+
+        return ranks
+
+
+    @staticmethod
+    def _compute_pearson_correlation(matrix_1, matrix_2):
+        """
+        Calculates the Pearson correlation coefficient and the p-value between two matrices.
+
+        Args:
+            matrix_1 (torch.Tensor): First input matrix.
+            matrix_2 (torch.Tensor): Second input matrix.
+
+        Returns:
+            A tuple containing the Pearson correlation coefficient (float) and the p-value (float) between the two matrices.
+
+        Raises:
+            TypeError: If either matrix_1 or matrix_2 is not a PyTorch Tensor.
+        """
+        # Compute the Pearson correlation between the entire vectors
+        correlation, p_value = pearsonr(matrix_1.cpu().numpy(), matrix_2.cpu().numpy())
+
+        # Return the vector-wise correlation and p-value
+        return correlation, p_value
 
 
 
