@@ -106,7 +106,7 @@ class ConditionalEvaluation():
             raise ValueError("Invalid aggregation method, choose from {}".format(self._aggregs))
         self._aggregate = value
 
-    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, k_range=[1, 5, 10]) -> dict:
+    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10]) -> dict:
         """
         This function is used to compare two tensors and return a dictionary with the scores for each value in k_range. The comparison is performed based on the method and aggregation set for the class. The tensors should be either 2D or 3D tensors for embeddings, or 4D or 5D tensors for images.
 
@@ -128,7 +128,7 @@ class ConditionalEvaluation():
 
         """   
         # check if format is correct and prepare data if its in image format
-        arr1,arr2 = self._prepare_data_format(arr1, arr2,k_range)
+        arr1,arr2,control = self._prepare_data_format(arr1, arr2,k_range,control)
         dict_score = {}
         #### Inter class metric
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score)
@@ -157,8 +157,6 @@ class ConditionalEvaluation():
         #### Inter class metric
         matrix_1 = self._methods[self._method](arr1, arr1)
         matrix_2 = self._methods[self._method](arr2, arr2)
-        print(matrix_1)
-        print(matrix_2)
         # delete the diagonal of each matrix
         matrix_1 = matrix_1[~torch.eye(matrix_1.shape[0], dtype=bool)].view(matrix_1.shape[0], -1)
         matrix_2 = matrix_2[~torch.eye(matrix_2.shape[0], dtype=bool)].view(matrix_2.shape[0], -1)
@@ -213,7 +211,7 @@ class ConditionalEvaluation():
         output['exact_matching'] = (r_exact/matrix.shape[0]) * 100
         return output
     
-    def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list) -> tuple:
+    def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None) -> tuple:
 
         """
         Prforms input validation, and normalization of the input data before using it to calculate similarity 
@@ -228,6 +226,8 @@ class ConditionalEvaluation():
         H is the height, and W is the width of the input image, and N is the number of classes, I the number of instances,
         and F is the number of features.
         k_range: A list of integers that indicates the values of k in the top-k similarity scoring metric.
+        control: A torch.Tensor object of shape (I, H, W, C) or (H, W, C) or (I, F) or (F), where C is the number of channels,
+        H is the height, and W is the width of the input image, and I the number of instances, and F is the number of features.
         Returns:
         A tuple containing two torch.Tensor objects that represent arr1 and arr2 after validation and normalization.
         Raises:
@@ -241,10 +241,20 @@ class ConditionalEvaluation():
             arr1 = torch.tensor(arr1)
         if isinstance(arr2, np.ndarray):
             arr2 = torch.tensor(arr2)
+        if isinstance(control, np.ndarray):
+            control = torch.tensor(control)
+        if isinstance(arr1, list):
+            arr1 = torch.tensor(arr1)
+        if isinstance(arr2, list):
+            arr2 = torch.tensor(arr2)
+        if isinstance(control, list):
+            control = torch.tensor(control)
         if not isinstance(arr1, torch.Tensor):
             raise TypeError(f"First tensor should be a torch.Tensor but got {type(arr1)}")
         if not isinstance(arr2, torch.Tensor):
             raise TypeError(f"Second tensor should be a torch.Tensor but got {type(arr2)}")
+        if not isinstance(control, torch.Tensor) and control is not None:
+            raise TypeError(f"Non null Control tensor should be a torch.Tensor but got {type(control)}")
         # check if arr1 and arr2 are floats, and convert to float if they are not
         if arr1.dtype != torch.float:
             # try to convert to float and if error, raise error that input should have float dtype
@@ -258,8 +268,12 @@ class ConditionalEvaluation():
                 arr2 = arr2.float()
             except:
                 raise TypeError(f"Second tensor should have float dtype but got {arr2.dtype}")
-        if arr2.dtype != torch.float:
-            arr2 = arr2.float()
+        if control is not None and control.dtype != torch.float:
+            # try to convert to float and if error, raise error that input should have float dtype
+            try:
+                control = control.float()
+            except:
+                raise TypeError(f"Control tensor should have float dtype but got {control.dtype}")
         # Check if the number of classes is greater than 1
         if arr1.shape[0] < 2:
             raise ValueError(f"First tensor should have at least 2 classes but got {arr1.shape[0]}")
@@ -273,6 +287,8 @@ class ConditionalEvaluation():
             raise ValueError(f"First tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr1.ndim}D tensor")
         if arr2.ndim not in [2, 3,4,5]:
             raise ValueError(f"Second tensor should be a 2D or 3D tensor for embeddings, or 4D or 5D tensor for images, but got {arr2.ndim}D tensor")
+        if control is not None and control.ndim not in [1,2, 3,4]:
+            raise ValueError(f"Control tensor should be a 1D or 2D or 3D or 4D tensor for images, but got {control.ndim}D tensor")
         # check if number of classes if less than max value of k_range
         if arr1.shape[0] < max(k_range):
             # modify k_range to have only values less than number of classes
@@ -280,6 +296,8 @@ class ConditionalEvaluation():
         # check if both arrays are on the same device
         if arr1.device != arr2.device:
             raise ValueError(f"First tensor and second tensor should be on the same device but got {arr1.device} and {arr2.device} respectively")
+        if control is not None and arr1.device != control.device:
+            raise ValueError(f"Array tensors and Control tensor should be on the same device but got {arr1.device} and {control.device} respectively")
         # here the code for inception model
         if arr1.ndim in [4,5] :
             # call inception function
@@ -287,10 +305,17 @@ class ConditionalEvaluation():
         if arr2.ndim in [4,5] :
             # call inception function
             arr2 = self._extract_inception_embeddings(arr2)
+        if control is not None and control.ndim in [3,4] :
+            # call inception function
+            control = self._extract_inception_embeddings(control)
+            #TODO
+            pass
         # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
         if arr1.ndim in [2, 3] and arr2.ndim in [2, 3] and arr1.shape[-1] != arr2.shape[-1]:
             raise ValueError(f"First tensor and second tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {arr2.shape[-1]} respectively")
-                # check if method and aggregate attributes are valid
+        if control is not None and arr1.ndim in [2, 3] and control.ndim in [1, 2] and arr1.shape[-1] != control.shape[-1]:
+            raise ValueError(f"First tensor and Control tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {control.shape[-1]} respectively")
+        # check if method and aggregate attributes are valid
         if self._method not in self._methods:
             raise ValueError(f"{self._method} not in list of defined methods. Please choose from {list(self._methods.keys())}")
         if self._aggregate not in self._aggregs:
@@ -300,7 +325,9 @@ class ConditionalEvaluation():
             arr1 = self._aggregs[self._aggregate](arr1)
         if arr2.ndim == 3:
             arr2 = self._aggregs[self._aggregate](arr2)
-        return arr1,arr2
+        #if control is not None and control.ndim == 2:
+            #control = self._aggregs[self._aggregate](control) # TODO: check if this is correct and working with the existing aggregation functions
+        return arr1,arr2,control
 
 
     def _extract_inception_embeddings(self,images: torch.Tensor)  -> torch.Tensor:
@@ -339,8 +366,11 @@ class ConditionalEvaluation():
         elif len(images.shape) == 4:
             # case when input is ('number of classes', 'height','width', 'channels')
             pass
+        elif len(images.shape) == 3:
+            # case when input is ('height','width', 'channels')
+            images = images.unsqueeze(0)
         else:
-            raise ValueError("Input image shape should be either 5 or 4 dimensional")
+            raise ValueError("Input image shape should be either 5 or 4 or 3 dimensional")
         # get the device of the images
         device = images.device
         # move the inception model to the same device as the images
@@ -491,6 +521,34 @@ if __name__ == '__main__':
         print("4D tensors on GPU")
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+
+        # test on 4D tensors with 3D control
+        arr1 = torch.randn(110, 10, 10,3) * 256
+        arr2 = torch.randn(110, 10, 10, 3) * 256
+        control = torch.randn(10, 10, 3) * 256
+        # pass the arrays to first gpu
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        control = control.cuda(best_gpu)
+        print("4D tensors on GPU + 3D control")
+        start_time = time.time()
+        print(topk(arr1, arr2, control=control,k_range=[1, 5, 10]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+
+        # test on 4D tensors with 4D control
+        arr1 = torch.randn(110, 10, 10,3) * 256
+        arr2 = torch.randn(110, 10, 10, 3) * 256
+        control = torch.randn(20,10, 10, 3) * 256
+        # pass the arrays to first gpu
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        control = control.cuda(best_gpu)
+        print("4D tensors on GPU + 4D control")
+        start_time = time.time()
+        print(topk(arr1, arr2, control=control,k_range=[1, 5, 10]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
         # test on 5D tensors
