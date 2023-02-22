@@ -1,17 +1,21 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.models as models
 import numpy as np
 import torchvision.transforms as transforms
 from PIL import Image
 import time
 import bioval.utils.gpu_manager as gpu_manager
+import bioval.utils.distance as distance
+import bioval.utils.aggregation as aggregation
+
+from scipy.stats import pearsonr
 
 
 
 
-class TopKDistance:
+
+class ConditionalEvaluation():
     """
     This class computes top K distance between two tensors.
 
@@ -42,19 +46,8 @@ class TopKDistance:
     def __init__(self, method: str = 'euclidean',aggregate: str = 'mean'):
         self._method = method
         self._aggregate = aggregate
-        self._methods = {
-            'euclidean': self._euclidean,
-            'cosine': self._cosine,
-            'correlation': self._correlation,
-            'chebyshev': self._chebyshev,
-            'minkowski': self._minkowski,
-            'cityblock': self._cityblock
-        }
-        self._aggregs = {
-            'mean': self._mean,
-            'median': self._median,
-            'robust_mean': self._robust_mean
-        }
+        self._methods = distance.get_distance_functions()
+        self._aggregs = aggregation.get_aggregation_functions()
         self.inception = models.inception_v3(pretrained=True)
         # Set the model to evaluation mode
         self.inception.eval()
@@ -66,20 +59,49 @@ class TopKDistance:
 
     @property
     def method(self):
+        """
+        Get the value of the 'method' property.
+        Returns:
+                str: The comparison method to be used for calculating the distance between arrays.
+        """
         return self._method
 
     @method.setter
     def method(self, value):
+        """
+        Set the value of the 'method' property.
+
+        Args:
+            value (str): The comparison method to be used for calculating the distance between arrays.
+
+        Raises:
+            ValueError: If the value provided for 'method' is not in the list of valid methods.
+        """
         if value not in self._methods:
             raise ValueError("Invalid method, choose from {}".format(self._methods))
         self._method = value
 
     @property
     def aggregate(self):
+        """
+        Get the value of the 'aggregate' property.
+
+        Returns:
+            str: The aggregation method to be used to convert 3D tensors to 2D tensors.
+        """
         return self._aggregate
 
     @aggregate.setter
     def aggregate(self, value):
+        """
+        Set the value of the 'aggregate' property.
+
+        Args:
+            value (str): The aggregation method to be used to convert 3D tensors to 2D tensors.
+
+        Raises:
+            ValueError: If the value provided for 'aggregate' is not in the list of valid aggregations.
+        """
         if value not in self._aggregs:
             raise ValueError("Invalid aggregation method, choose from {}".format(self._aggregs))
         self._aggregate = value
@@ -103,14 +125,117 @@ class TopKDistance:
             dict: A dictionary with the scores for each value in k_range.
 
 
-        Example
-        -------
-        >>> arr1 = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
-        >>> arr2 = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
-        >>> top_k_distance = TopKDistance()
-        >>> top_k_distance(arr1, arr2)
-        {'top1': tensor(1.5000), 'top5': tensor(6.5000), 'mean_ranks': tensor(50.1375), 'exact_matching': tensor(0.)}
+
         """   
+        # check if format is correct and prepare data if its in image format
+        arr1,arr2 = self._prepare_data_format(arr1, arr2,k_range)
+        dict_score = {}
+        #### Inter class metric
+        dict_score = self._compute_interclass_scores(arr1, arr2,dict_score)
+        #### Intra class metric
+        dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score)
+        return dict_score
+    
+
+    def _compute_interclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict) -> dict:
+        """
+        Computes the interclass scores of two matrices using the specified comparison method.
+        Interclass metric is a metric that allows the comparison of classes of two different sets or matrices. 
+
+        Args:
+        - matrix_1: a tensor of shape (num_samples_1, num_features) representing the first matrix
+        - matrix_2: a tensor of shape (num_samples_2, num_features) representing the second matrix
+        - output: a dictionary containing the scores of comparison. 
+
+        Returns:
+        A dictionary containing the correlation score and the p-value score of the interclass metric comparison.
+
+        Raises:
+        - ValueError: if any of the matrices does not have a valid shape or if the comparison method is not valid.
+
+        """
+        #### Inter class metric
+        matrix_1 = self._methods[self._method](arr1, arr1)
+        matrix_2 = self._methods[self._method](arr2, arr2)
+        print(matrix_1)
+        print(matrix_2)
+        # delete the diagonal of each matrix
+        matrix_1 = matrix_1[~torch.eye(matrix_1.shape[0], dtype=bool)].view(matrix_1.shape[0], -1)
+        matrix_2 = matrix_2[~torch.eye(matrix_2.shape[0], dtype=bool)].view(matrix_2.shape[0], -1)
+
+        # flatten the matrices
+        matrix_1 = matrix_1.flatten()
+        matrix_2 = matrix_2.flatten()
+
+        # Compute correlations between the two matrices
+        corr,pvalue = self._compute_pearson_correlation(matrix_1, matrix_2)
+
+        # add the correlation score to the dictionary
+        output['inter_corr'] = corr
+        output['inter_p'] = pvalue
+        return output
+    
+    def _compute_intraclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,output : dict) -> dict:
+        """
+        Computes various evaluation metrics for comparing two given tensors. The function takes two tensor inputs 
+        arr1 and arr2, a list of integer values k_range, and a dictionary output and returns a dictionary with 
+        evaluation scores. The function computes intraclass scores for the input tensors by computing the diagonal 
+        ranks of the comparison matrix between the tensors, and then calculates the mean ranks, top-k, 
+        and exact matching scores.
+
+        Parameters:
+
+        arr1: A tensor representing the first set of embeddings or images.
+        arr2: A tensor representing the second set of embeddings or images.
+        k_range: A list of integer values representing the number of top-k scores to be computed.
+        output: A dictionary containing the results of the evaluation metrics computed by the function.
+        Returns:
+
+        output: A dictionary containing the results of the evaluation metrics computed by the function.
+        """
+        # get the matrix for comparison using the specified method
+        matrix = self._methods[self._method](arr1, arr2)
+        # compute the diagonal ranks of the comparison matrix
+        ranks = self._compute_diag_ranks(matrix)
+        # compute the scores for each value in k_range
+        mean_ranks = torch.mean(ranks.float(), dim=0)
+        
+        # compute the scores for each value in k_range
+        for k in k_range :
+            number_values = k 
+            r = (ranks <= number_values).sum()
+            r = (r/matrix.shape[0]) * 100
+            output['intra_top'+str(k)] = r
+        # add the mean ranks score to the dictionary
+        output['mean_ranks'] = (mean_ranks/matrix.shape[0]) * 100
+        # add the exact matching score to the dictionary
+        r_exact = (ranks == 0).sum()
+        output['exact_matching'] = (r_exact/matrix.shape[0]) * 100
+        return output
+    
+    def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list) -> tuple:
+
+        """
+        Prforms input validation, and normalization of the input data before using it to calculate similarity 
+        scores between two tensors. It prepares and formats the input tensors to make sure they are in a valid format, 
+        on the same device, and ready for similarity scoring.
+
+        Parameters:
+        arr1: A torch.Tensor object of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where C is the number of channels, 
+        H is the height, and W is the width of the input image, and N is the number of classes, I the number of instances,
+        and F is the number of features.
+        arr2: A torch.Tensor object of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where C is the number of channels, 
+        H is the height, and W is the width of the input image, and N is the number of classes, I the number of instances,
+        and F is the number of features.
+        k_range: A list of integers that indicates the values of k in the top-k similarity scoring metric.
+        Returns:
+        A tuple containing two torch.Tensor objects that represent arr1 and arr2 after validation and normalization.
+        Raises:
+        TypeError: if any of arr1 and arr2 is not a torch.Tensor object, or they are not of the same device, or they don't have float dtype.
+        ValueError: if any of arr1 and arr2 have less than 2 classes, or they have different number of classes, or they don't have a valid number of dimensions, or the number of classes is less than the maximum value of k_range, or method or aggregate attributes are not valid.
+        AssertionError: if the returned objects are not of type tuple.
+
+        """
         # check if arr1 and arr2 are tensors of the same shape and raise error if not
         if isinstance(arr1, np.ndarray):
             arr1 = torch.tensor(arr1)
@@ -175,61 +300,7 @@ class TopKDistance:
             arr1 = self._aggregs[self._aggregate](arr1)
         if arr2.ndim == 3:
             arr2 = self._aggregs[self._aggregate](arr2)
-        # get the matrix for comparison using the specified method
-        matrix = self._methods[self._method](arr1, arr2)
-        # compute the diagonal ranks of the comparison matrix
-        ranks = self._compute_diag_ranks(matrix)
-        # compute the scores for each value in k_range
-        mean_ranks = torch.mean(ranks.float(), dim=0)
-        dict_score = {}
-        # compute the scores for each value in k_range
-        for k in k_range :#.keys():
-            number_values = k 
-            r = (ranks <= number_values).sum()
-            r = (r/matrix.shape[0]) * 100
-            dict_score['top'+str(k)] = r
-        # add the mean ranks score to the dictionary
-        dict_score['mean_ranks'] = (mean_ranks/matrix.shape[0]) * 100
-        # add the exact matching score to the dictionary
-        r_exact = (ranks == 0).sum()
-        dict_score['exact_matching'] = (r_exact/matrix.shape[0]) * 100
-        return dict_score
-
-
-    
-    @staticmethod
-    def _compute_diag_ranks(matrix: torch.Tensor) -> torch.Tensor:
-        """
-        Computes the diagonal ranks of a given matrix.
-
-        Parameters:
-        matrix (torch.Tensor): 2D tensor of similarity scores between two arrays.
-
-        Returns:
-        torch.Tensor: 1D tensor of ranks of the diagonal elements in the input matrix. 
-                    Ranks start from 1, with 1 being the highest score.
-
-        Example:
-        >>> matrix = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
-        >>> _compute_diag_ranks(matrix)
-        tensor([1, 3, 2])
-        """
-        # Sort matrix in descending order along each column
-        _, indices = torch.sort(matrix, dim=0, descending=True)
-
-        # Initialize ranks tensor with zeros
-        ranks = torch.zeros(matrix.shape[0], dtype=torch.int64)
-
-        # Compute the rank of each diagonal element by finding its index
-        for i in range(matrix.shape[0]):
-            ranks[i] = (indices[:, i] == i).nonzero()[0].item() + 1  # to have index starting at 1
-
-        return ranks
-
-
-
-
-        
+        return arr1,arr2
 
 
     def _extract_inception_embeddings(self,images: torch.Tensor)  -> torch.Tensor:
@@ -277,8 +348,8 @@ class TopKDistance:
         # Transfer the images to cpu
         images = images.cpu()
         images = images.numpy()
-        images = images.astype('uint8')
-        images = [Image.fromarray(image) for image in images]
+        images = images.astype(np.uint8)
+        images = [Image.fromarray(image.astype(np.uint8)) for image in images]
         images = torch.stack([transform(image) for image in images])
         # transfer images to the device of the inception model
         images = images.to(device)
@@ -290,67 +361,71 @@ class TopKDistance:
         elif len(original_shape) == 4:
             embeddings = embeddings.reshape(images.shape[0], -1)
         return embeddings
+    
+    @staticmethod
+    def _compute_diag_ranks(matrix: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the diagonal ranks of a given matrix.
 
+        Parameters:
+        matrix (torch.Tensor): 2D tensor of similarity scores between two arrays.
 
+        Returns:
+        torch.Tensor: 1D tensor of ranks of the diagonal elements in the input matrix. 
+                    Ranks start from 1, with 1 being the highest score.
 
+        Example:
+        >>> matrix = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
+        >>> _compute_diag_ranks(matrix)
+        tensor([1, 3, 2])
+        """
+        # Sort matrix in descending order along each column
+        _, indices = torch.sort(matrix, dim=0, descending=True)
+
+        # Initialize ranks tensor with zeros
+        ranks = torch.zeros(matrix.shape[0], dtype=torch.int64)
+
+        # Compute the rank of each diagonal element by finding its index
+        for i in range(matrix.shape[0]):
+            ranks[i] = (indices[:, i] == i).nonzero()[0].item() + 1  # to have index starting at 1
+
+        return ranks
 
 
     @staticmethod
-    def _euclidean(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        return torch.norm(arr1[:, None, :] - arr2[None, :, :], p=2, dim=-1)
+    def _compute_pearson_correlation(matrix_1, matrix_2):
+        """
+        Calculates the Pearson correlation coefficient and the p-value between two matrices.
 
-    @staticmethod
-    def _cosine(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        return 1 - F.cosine_similarity(arr1[:, None, :], arr2[None, :, :], dim=-1)
+        Args:
+            matrix_1 (torch.Tensor): First input matrix.
+            matrix_2 (torch.Tensor): Second input matrix.
 
-    @staticmethod
-    def _correlation(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        mean1 = torch.mean(arr1, dim=-1, keepdim=True)
-        mean2 = torch.mean(arr2, dim=-1, keepdim=True)
-        centered1 = arr1 - mean1
-        centered2 = arr2 - mean2
-        return 1 - torch.sum(centered1[:, None, :] * centered2[None, :, :], dim=-1) / torch.norm(centered1, p=2, dim=-1) / torch.norm(centered2, p=2, dim=-1)
+        Returns:
+            A tuple containing the Pearson correlation coefficient (float) and the p-value (float) between the two matrices.
 
-    @staticmethod
-    def _chebyshev(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        return torch.max(torch.abs(arr1[:, None, :] - arr2[None, :, :]), dim=-1)[0]
+        Raises:
+            TypeError: If either matrix_1 or matrix_2 is not a PyTorch Tensor.
+        """
+        # Compute the Pearson correlation between the entire vectors
+        correlation, p_value = pearsonr(matrix_1.cpu().numpy(), matrix_2.cpu().numpy())
 
-    @staticmethod
-    def _minkowski(arr1: torch.Tensor, arr2: torch.Tensor, p: float = 3) -> torch.Tensor:
-        return torch.norm(arr1[:, None, :] - arr2[None, :, :], p=p, dim=-1)
-
-    @staticmethod
-    def _cityblock(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
-        return torch.sum(torch.abs(arr1[:, None, :] - arr2[None, :, :]), dim=-1)
+        # Return the vector-wise correlation and p-value
+        return correlation, p_value
 
 
 
-    @staticmethod
-    def _mean(emb: torch.Tensor) -> torch.Tensor:
-        if emb.ndim == 3:
-            return torch.mean(emb, dim=1)
-        else:
-            return emb
-    @staticmethod
-    def _median(emb: torch.Tensor) -> torch.Tensor:
-        if emb.ndim == 3:
-            return torch.median(emb, dim=1)[0]
-        else:
-            return emb
-    @staticmethod
-    def _robust_mean(emb: torch.Tensor) -> torch.Tensor:
-        if emb.ndim == 3:
-            log_embeddings = torch.log(emb + 1e-8)
-            avg_log_embeddings = torch.mean(log_embeddings, dim=1)
-            return torch.exp(avg_log_embeddings)
-        else:
-            return emb
 
+
+
+
+
+    
 # test the class
 if __name__ == '__main__':
     best_gpu = gpu_manager.get_available_gpu()
     
-    topk = TopKDistance()
+    topk = ConditionalEvaluation()
 
     # test on 2D tensors
     arr1 = torch.randn(100, 10)

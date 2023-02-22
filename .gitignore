@@ -1,0 +1,11 @@
+# ignore everything in tutorials/data
+bioval/tutorials/data/*
+# ignore everything in tutorials/images
+bioval/tutorials/images/*
+# dont ignore the .placeholder file in tutorials/images
+!bioval/tutorials/images/.placeholder
+# Dont ignore the .placeholder file in tutorials/data
+!bioval/tutorials/data/.placeholder
+
+dist/*
+!dist/.placeholder

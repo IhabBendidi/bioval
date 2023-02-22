@@ -12,6 +12,7 @@ def get_available_gpu():
         int : index of the GPU with the lowest combined metric
         None if the system has no GPUs
     """
+    # TODO : Add warning/or notification if the best gpu of the machine is already above 50% utilization or memory
     try:
         pynvml.nvmlInit()
     except:
