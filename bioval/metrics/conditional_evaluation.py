@@ -308,8 +308,6 @@ class ConditionalEvaluation():
         if control is not None and control.ndim in [3,4] :
             # call inception function
             control = self._extract_inception_embeddings(control)
-            #TODO
-            pass
         # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
         if arr1.ndim in [2, 3] and arr2.ndim in [2, 3] and arr1.shape[-1] != arr2.shape[-1]:
             raise ValueError(f"First tensor and second tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {arr2.shape[-1]} respectively")
@@ -325,8 +323,8 @@ class ConditionalEvaluation():
             arr1 = self._aggregs[self._aggregate](arr1)
         if arr2.ndim == 3:
             arr2 = self._aggregs[self._aggregate](arr2)
-        #if control is not None and control.ndim == 2:
-            #control = self._aggregs[self._aggregate](control) # TODO: check if this is correct and working with the existing aggregation functions
+        if control is not None and control.ndim == 2:
+            control = self._aggregs[self._aggregate](control,control=True) 
         return arr1,arr2,control
 
 

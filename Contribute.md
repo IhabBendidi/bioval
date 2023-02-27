@@ -13,3 +13,17 @@
 - Multiprocessing? both cpu and gpu. It should be both adaptive to pytorch and PL multiprocessing, or do multiprocessing for acceleration on its own
 - Add wiki files that explain usage and eaxmples and docs of the code
 - Automate github actions to test automatically the code in containers after each push
+- Add a wiki page for the project
+
+
+--- Control tasks :
+- Finish integrating control into the code
+- Add unit tests for control additions
+- Write better code documentation after control additions
+- prepare the readme and tutorials for usage of the code
+- Add license file
+- Link contributing file and license file to main readme
+- Add a code of conduct file
+- Add a pull request template file
+- Add a issue template file
+- Write a wiki page describing the metric class and its usage
