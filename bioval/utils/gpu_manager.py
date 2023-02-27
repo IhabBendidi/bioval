@@ -19,6 +19,8 @@ def get_available_gpu():
 
     best_gpu = 0
     lowest_metric = float('inf')
+    best_util = 0
+    best_mem = 0
     gpu_count = pynvml.nvmlDeviceGetCount()
     if gpu_count == 0:
         return None
@@ -33,8 +35,12 @@ def get_available_gpu():
         if metric < lowest_metric:
             best_gpu = i
             lowest_metric = metric
-        if util.gpu > 50 or meminfo.used / meminfo.total > 0.5:
-            print(f"Warning: GPU {i} is already above 50% utilization or memory")
+            best_util = util.gpu
+            best_mem = meminfo.used / meminfo.total
+    if best_util> 50  :
+        print(f"Warning: GPU {i} is already above 50% utilization.")
+    if best_mem > 0.5 :
+        print(f"Warning: GPU {i} is already above 50% memory usage.")
 
 
     pynvml.nvmlShutdown()
