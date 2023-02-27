@@ -130,6 +130,11 @@ class ConditionalEvaluation():
         # check if format is correct and prepare data if its in image format
         arr1,arr2,control = self._prepare_data_format(arr1, arr2,k_range,control)
         dict_score = {}
+        #### Control metric
+        if control is not None:
+            #TODO: add control metric
+            pass
+            #dict_score = self._compute_control_scores(arr1, arr2,control,dict_score)
         #### Inter class metric
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score)
         #### Intra class metric
@@ -229,7 +234,7 @@ class ConditionalEvaluation():
         control: A torch.Tensor object of shape (I, H, W, C) or (H, W, C) or (I, F) or (F), where C is the number of channels,
         H is the height, and W is the width of the input image, and I the number of instances, and F is the number of features.
         Returns:
-        A tuple containing two torch.Tensor objects that represent arr1 and arr2 after validation and normalization.
+        A tuple containing two torch.Tensor objects that represent arr1 and arr2 and control after validation and normalization.
         Raises:
         TypeError: if any of arr1 and arr2 is not a torch.Tensor object, or they are not of the same device, or they don't have float dtype.
         ValueError: if any of arr1 and arr2 have less than 2 classes, or they have different number of classes, or they don't have a valid number of dimensions, or the number of classes is less than the maximum value of k_range, or method or aggregate attributes are not valid.
