@@ -24,15 +24,12 @@ class TestConditionalEvaluation(unittest.TestCase):
         
     
     def test_call(self):
-
         # Test error on invalid method
         topk = ConditionalEvaluation()
         with self.assertRaises(ValueError):
             topk(torch.zeros(2, 3), torch.zeros(2, 3), k_range=[1, 5, 10])
             topk.method = 'invalid'
-        
-        
-        
+
         # Test error on invalid aggregate
         topk = ConditionalEvaluation(method='cosine')
         with self.assertRaises(ValueError):

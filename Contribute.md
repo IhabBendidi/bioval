@@ -19,6 +19,7 @@
 --- Control tasks :
 - Add unit tests for control additions
 - Write better code documentation after control additions
+- Note that oder of classes and number of classes in input is important to keep as the full classes of data
 - prepare the readme and tutorials for usage of the code
 - Add license file
 - Link contributing file and license file to main readme

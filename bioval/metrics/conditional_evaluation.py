@@ -132,9 +132,6 @@ class ConditionalEvaluation():
         dict_score = {}
         #### Control metric
         if control is not None:
-            print("Control metric is not implemented yet")
-            
-            #TODO: add control metric
             dict_score = self._compute_control_scores(arr1, arr2,control,dict_score)
         #### Inter class metric
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score)
@@ -236,10 +233,16 @@ class ConditionalEvaluation():
         dist1 = torch.norm(arr1 - control, dim=-1)
         # Compute the distances between the control and the vectors of each class of the second array
         dist2 = torch.norm(arr2 - control, dim=-1)
+        
+        # Compute the euclidean distance between each element of the two arrays of distances
+        score = torch.abs(dist1 - dist2)
+        # Add all classes scores to a new dictionary inside existing dictionary :
+        output['class_control_scores'] = score.tolist()
         # Compute the euclidean distance between the two arrays of distances
         score = torch.norm(dist1 - dist2, p=2)
-        # Update the output dictionary with the control score
+        # add the control score to the dictionary
         output['control_score'] = score.item()
+
         return output
 
     def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None) -> tuple:
