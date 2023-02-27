@@ -132,9 +132,10 @@ class ConditionalEvaluation():
         dict_score = {}
         #### Control metric
         if control is not None:
+            print("Control metric is not implemented yet")
+            
             #TODO: add control metric
-            pass
-            #dict_score = self._compute_control_scores(arr1, arr2,control,dict_score)
+            dict_score = self._compute_control_scores(arr1, arr2,control,dict_score)
         #### Inter class metric
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score)
         #### Intra class metric
@@ -148,8 +149,8 @@ class ConditionalEvaluation():
         Interclass metric is a metric that allows the comparison of classes of two different sets or matrices. 
 
         Args:
-        - matrix_1: a tensor of shape (num_samples_1, num_features) representing the first matrix
-        - matrix_2: a tensor of shape (num_samples_2, num_features) representing the second matrix
+        - matrix_1: a tensor of shape (num_classes, num_features) representing the first matrix
+        - matrix_2: a tensor of shape (num_classes, num_features) representing the second matrix
         - output: a dictionary containing the scores of comparison. 
 
         Returns:
@@ -215,7 +216,32 @@ class ConditionalEvaluation():
         r_exact = (ranks == 0).sum()
         output['exact_matching'] = (r_exact/matrix.shape[0]) * 100
         return output
-    
+
+
+    def _compute_control_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,control: torch.Tensor,output : dict) -> dict:
+        """
+        Computes the control scores of two matrices with control using the specified comparison method. We compute 
+        the distance between the control and the vector representing each class of the first array to get an array of distances.
+        We compute the same score for the second array, and then compute the euclidean distance between the two arrays of distances.
+
+        Parameters : 
+        arr1: A torch.Tensor object of shape  (N, F), where N is the number of classes and F is the number of features.
+        arr2: A torch.Tensor object of shape  (N, F), where N is the number of classes and F is the number of features.
+        control: A torch.Tensor object of shape  (F), where F is the number of features.
+        output: A dictionary containing the results of the evaluation metrics computed by the function.
+        Returns :
+        output: A dictionary containing the results of the evaluation metrics computed by the function.
+        """
+        # Compute the distances between the control and the vectors of each class of the first array
+        dist1 = torch.norm(arr1 - control, dim=-1)
+        # Compute the distances between the control and the vectors of each class of the second array
+        dist2 = torch.norm(arr2 - control, dim=-1)
+        # Compute the euclidean distance between the two arrays of distances
+        score = torch.norm(dist1 - dist2, p=2)
+        # Update the output dictionary with the control score
+        output['control_score'] = score.item()
+        return output
+
     def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None) -> tuple:
 
         """

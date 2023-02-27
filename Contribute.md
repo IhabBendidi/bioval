@@ -17,7 +17,6 @@
 
 
 --- Control tasks :
-- Finish integrating control into the code
 - Add unit tests for control additions
 - Write better code documentation after control additions
 - prepare the readme and tutorials for usage of the code
