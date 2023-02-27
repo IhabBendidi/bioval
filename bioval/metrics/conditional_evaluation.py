@@ -17,7 +17,12 @@ from scipy.stats import pearsonr
 
 class ConditionalEvaluation():
     """
-    This class computes top K distance between two tensors.
+    This class computes a set metrics for evaluation of conditional generation :
+    1 - It computes TopK intraclass distance between generated and real.
+    2 - It computes the interclass preservation of correlations between generated and real.
+    3 - In the biology context, it measures the preservation of distance of generated classes 
+    from the control class in both real and generated images.
+
 
     Parameters
     ----------
@@ -26,8 +31,8 @@ class ConditionalEvaluation():
         'correlation', 'chebyshev', 'minkowski', and 'cityblock'. The default method is 'euclidean'.
 
     aggregate : str, optional
-        The method for aggregating a 3D tensor into a 2D tensor. The options are 'mean', 'median', and 'robust_mean'.
-        The default aggregate method is 'mean'.
+        The method for aggregating a 3D tensor into a 2D tensor (Or a 2D tensor to a 1D tensor in the case of control).
+        The options are 'mean', 'median', and 'robust_mean'. The default aggregate method is 'mean'.
 
     Attributes
     ----------
@@ -43,6 +48,7 @@ class ConditionalEvaluation():
     _aggregs : dict
         A dictionary containing all the available methods for aggregating a 3D tensor into a 2D tensor.
     """
+
     def __init__(self, method: str = 'euclidean',aggregate: str = 'mean'):
         self._method = method
         self._aggregate = aggregate
@@ -53,9 +59,9 @@ class ConditionalEvaluation():
         self.inception.eval()
         if self._method not in list(self._methods.keys()):
             raise ValueError(f"Method {self._method} not available. Available methods are {list(self._methods.keys())}")
-
         if self._aggregate not in list(self._aggregs.keys()):
             raise ValueError(f"Aggregation method {self._aggregate} not available. Available aggregation methods are {list(self._aggregs.keys())}")
+
 
     @property
     def method(self):
@@ -65,6 +71,7 @@ class ConditionalEvaluation():
                 str: The comparison method to be used for calculating the distance between arrays.
         """
         return self._method
+
 
     @method.setter
     def method(self, value):
@@ -81,6 +88,7 @@ class ConditionalEvaluation():
             raise ValueError("Invalid method, choose from {}".format(self._methods))
         self._method = value
 
+
     @property
     def aggregate(self):
         """
@@ -90,6 +98,7 @@ class ConditionalEvaluation():
             str: The aggregation method to be used to convert 3D tensors to 2D tensors.
         """
         return self._aggregate
+
 
     @aggregate.setter
     def aggregate(self, value):
@@ -106,26 +115,28 @@ class ConditionalEvaluation():
             raise ValueError("Invalid aggregation method, choose from {}".format(self._aggregs))
         self._aggregate = value
 
+
     def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10]) -> dict:
         """
-        This function is used to compare two tensors and return a dictionary with the scores for each value in k_range. The comparison is performed based on the method and aggregation set for the class. The tensors should be either 2D or 3D tensors for embeddings, or 4D or 5D tensors for images.
+        This function is used to compare two tensors and return a dictionary with the scores of each of the three metrics. 
+        The comparison is performed based on the method and aggregation set for the class. 
+        The tensors for arr1 and arr2 should be either 2D or 3D tensors for embeddings, or 4D or 5D tensors 
+        for images. control is none if the control metric is not to be computed. If control metric is to be computed,
+        the tensor for control should be either 1D or 2D tensor for embeddings, or 3D or 4D tensor for images.
 
-        The function checks the input tensors, raises an error if they are not torch.Tensors, or if they do not have the same number of classes or features, or if they are not on the same device.
-
-        The function also checks the values of method and aggregate, raises an error if they are not in the list of defined methods or aggregations.
-
-        The function aggregates the tensors if they are 3D tensors, then it computes the comparison matrix using the specified method and computes the diagonal ranks of the comparison matrix. Finally, the function computes the scores for each value in k_range and returns a dictionary with the scores.
-
-        Parameters:
-            arr1 (torch.Tensor): The first tensor to be compared.
-            arr2 (torch.Tensor): The second tensor to be compared.
-            k_range (List[int]): A list of values for the range of k.
+        Args:
+            - arr1: A torch.Tensor object of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where C is the number of channels, 
+            H is the height, and W is the width of the input image, and N is the number of classes, I the number of instances,
+            and F is the number of features.
+            - arr2: A torch.Tensor object of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where C is the number of channels, 
+            H is the height, and W is the width of the input image, and N is the number of classes, I the number of instances,
+            and F is the number of features.
+            - control: If not not None, it is a torch.Tensor object of shape (I, H, W, C) or (H, W, C) or (I, F) or (F), where C is the number of channels,
+            H is the height, and W is the width of the input image, and I the number of instances, and F is the number of features.
+            - k_range (List[int]): A list of values for the range of k for intraclass scores.
 
         Returns:
-            dict: A dictionary with the scores for each value in k_range.
-
-
-
+            dict: A dictionary with the scores for each metric computed.
         """   
         # check if format is correct and prepare data if its in image format
         arr1,arr2,control = self._prepare_data_format(arr1, arr2,k_range,control)
@@ -183,6 +194,10 @@ class ConditionalEvaluation():
         evaluation scores. The function computes intraclass scores for the input tensors by computing the diagonal 
         ranks of the comparison matrix between the tensors, and then calculates the mean ranks, top-k, 
         and exact matching scores.
+
+        , then it computes the comparison matrix 
+        using the specified method and computes the diagonal ranks of the comparison matrix. 
+        Finally, the function computes the scores for each value in k_range and returns a dictionary with the scores.
 
         Parameters:
 
@@ -251,6 +266,12 @@ class ConditionalEvaluation():
         Prforms input validation, and normalization of the input data before using it to calculate similarity 
         scores between two tensors. It prepares and formats the input tensors to make sure they are in a valid format, 
         on the same device, and ready for similarity scoring.
+
+        The _prepare_data_format function checks the input tensors, raises an error if they are not torch.Tensors, 
+        or if they do not have the same number of classes or features, or if they are not on the same device. 
+        It also checks the values of method and aggregate, raises an error if they are not in the list of defined methods or aggregations.
+        The function then extracts the features from the arrays and control if they are composed of images, and aggregates 
+        the features of tensors into one vector of features.
 
         Parameters:
         arr1: A torch.Tensor object of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where C is the number of channels, 
