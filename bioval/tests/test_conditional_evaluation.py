@@ -91,6 +91,30 @@ class TestConditionalEvaluation(unittest.TestCase):
         result = topk(arr1, arr2, k_range=[1, 5, 10])
         self.assertIsInstance(result, dict)
 
+        arr1 = torch.Tensor([
+            [1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9]
+        ])
+        arr2 = torch.Tensor([
+            [9, 8, 7],
+            [6, 5, 4],
+            [3, 2, 1]
+        ])
+        control = torch.Tensor([1, 2, 3])
+
+        topk = ConditionalEvaluation()
+        output = topk(arr1, arr2, control,k_range=[1, 5, 10])
+
+        self.assertTrue('control_score' in output)
+        self.assertTrue('class_control_scores' in output)
+        control_score = output['control_score']
+        self.assertIsInstance(control_score, float)
+
+        control_score_2 = output['class_control_scores']
+        self.assertIsInstance(control_score_2, list)
+
+
 if __name__ == '__main__':
     unittest.main(argv=[''], verbosity=2, exit=False)
     # call TestTopKDistance.test_init
