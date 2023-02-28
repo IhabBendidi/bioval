@@ -114,7 +114,6 @@ class TestConditionalEvaluation(unittest.TestCase):
         control_score_2 = output['class_control_scores']
         self.assertIsInstance(control_score_2, list)
 
-
 if __name__ == '__main__':
     unittest.main(argv=[''], verbosity=2, exit=False)
     # call TestTopKDistance.test_init

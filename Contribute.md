@@ -1,6 +1,5 @@
 - Add pytorch lightning integration tests
 - ajouter le distribué - Now
-- Merge with part about control compound - Now
 - Create attributes that return the last precomputed metric - V1
 - Can our method function with a different number of images foe each class? If not, how to handle that case? NOW
 - Define the aggreg and distance method in the computing itself - V1
@@ -17,7 +16,6 @@
 
 
 --- Control tasks :
-- Add unit tests for control additions
 - Write better code documentation after control additions
 - Note that oder of classes and number of classes in input is important to keep as the full classes of data
 - prepare the readme and tutorials for usage of the code
