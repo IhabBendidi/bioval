@@ -24,15 +24,12 @@ class TestConditionalEvaluation(unittest.TestCase):
         
     
     def test_call(self):
-
         # Test error on invalid method
         topk = ConditionalEvaluation()
         with self.assertRaises(ValueError):
             topk(torch.zeros(2, 3), torch.zeros(2, 3), k_range=[1, 5, 10])
             topk.method = 'invalid'
-        
-        
-        
+
         # Test error on invalid aggregate
         topk = ConditionalEvaluation(method='cosine')
         with self.assertRaises(ValueError):
@@ -93,6 +90,29 @@ class TestConditionalEvaluation(unittest.TestCase):
         topk = ConditionalEvaluation(method='cosine', aggregate='median')
         result = topk(arr1, arr2, k_range=[1, 5, 10])
         self.assertIsInstance(result, dict)
+
+        arr1 = torch.Tensor([
+            [1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9]
+        ])
+        arr2 = torch.Tensor([
+            [9, 8, 7],
+            [6, 5, 4],
+            [3, 2, 1]
+        ])
+        control = torch.Tensor([1, 2, 3])
+
+        topk = ConditionalEvaluation()
+        output = topk(arr1, arr2, control,k_range=[1, 5, 10])
+
+        self.assertTrue('control_score' in output)
+        self.assertTrue('class_control_scores' in output)
+        control_score = output['control_score']
+        self.assertIsInstance(control_score, float)
+
+        control_score_2 = output['class_control_scores']
+        self.assertIsInstance(control_score_2, list)
 
 if __name__ == '__main__':
     unittest.main(argv=[''], verbosity=2, exit=False)
