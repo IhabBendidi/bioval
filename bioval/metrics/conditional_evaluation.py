@@ -239,7 +239,7 @@ class ConditionalEvaluation():
         # add the mean ranks score to the dictionary
         output['mean_ranks'] = (mean_ranks/matrix.shape[0]) * 100
         # add the exact matching score to the dictionary
-        r_exact = (ranks == 0).sum()
+        r_exact = (ranks == 1).sum()
         output['exact_matching'] = (r_exact/matrix.shape[0]) * 100
         return output
 
@@ -413,7 +413,7 @@ class ConditionalEvaluation():
         Args:
 
             images (torch.Tensor): A batch of images with shape (number of classes, number of images in classes, height, width, channels) or (number of classes, height, width, channels), 
-            and for Control only : (number of images, height, width, channels) or (height, width, channels).
+            and for Control only : (number of classes, height, width, channels) or (height, width, channels).
 
         Returns:
 
@@ -464,6 +464,8 @@ class ConditionalEvaluation():
             embeddings = embeddings.reshape(images.shape[0], -1)
         return embeddings
     
+
+    
     @staticmethod
     def _compute_diag_ranks(matrix: torch.Tensor) -> torch.Tensor:
         """
@@ -482,19 +484,23 @@ class ConditionalEvaluation():
 
         >>> matrix = torch.tensor([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.1, 0.3, 0.6]])
         >>> _compute_diag_ranks(matrix)
-        tensor([1, 3, 2])
+        tensor([3, 3, 3])
         """
-        # Sort matrix in descending order along each column
-        _, indices = torch.sort(matrix, dim=0, descending=True)
+        sorted_indices = torch.argsort(matrix, dim=1)
+        rank_indices = torch.argsort(sorted_indices, dim=1)
+        diagonal_indices = torch.arange(0,matrix.shape[0])
+        # check if rank_indices or diagonal_indices is on gpu and if one of them is on gpu, put the other on the same gpu
+        if rank_indices.device != diagonal_indices.device:
+            if rank_indices.device == 'cpu':
+                diagonal_indices = diagonal_indices.to(rank_indices.device)
+            else:
+                rank_indices = rank_indices.to(diagonal_indices.device)
+        diagonal_ranks = torch.gather(rank_indices,dim=1,index=diagonal_indices.view(-1,1)) +1        
 
-        # Initialize ranks tensor with zeros
-        ranks = torch.zeros(matrix.shape[0], dtype=torch.int64)
+        #flatten the tensor
+        diagonal_ranks = diagonal_ranks.view(-1)
 
-        # Compute the rank of each diagonal element by finding its index
-        for i in range(matrix.shape[0]):
-            ranks[i] = (indices[:, i] == i).nonzero()[0].item() + 1  # to have index starting at 1
-
-        return ranks
+        return diagonal_ranks
 
 
     @staticmethod
@@ -531,6 +537,7 @@ class ConditionalEvaluation():
     
 # test the class
 if __name__ == '__main__':
+    
     best_gpu = gpu_manager.get_available_gpu()
     
     topk = ConditionalEvaluation()
@@ -669,6 +676,4 @@ if __name__ == '__main__':
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
-    
-
 
