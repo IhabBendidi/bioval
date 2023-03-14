@@ -277,7 +277,7 @@ class ConditionalEvaluation():
 
         return output
 
-    def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None) -> tuple:
+    def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None,aggregated=True) -> tuple:
 
         """
         Checks the input tensors, raises an error if they are not torch.Tensors, 
@@ -384,16 +384,16 @@ class ConditionalEvaluation():
         if control is not None and arr1.ndim in [2, 3] and control.ndim in [1, 2] and arr1.shape[-1] != control.shape[-1]:
             raise ValueError(f"First tensor and Control tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {control.shape[-1]} respectively")
         # check if method and aggregate attributes are valid
-        if self._method not in self._methods:
+        if self._method not in self._methods and aggregated:
             raise ValueError(f"{self._method} not in list of defined methods. Please choose from {list(self._methods.keys())}")
-        if self._aggregate not in self._aggregs:
+        if self._aggregate not in self._aggregs and aggregated:
             raise ValueError(f"{self._aggregate} not in list of defined aggregations. Please choose from {list(self._aggregs.keys())}")
         # aggregate the arrays if they are 3D tensors
-        if arr1.ndim == 3:
+        if arr1.ndim == 3 and aggregated:
             arr1 = self._aggregs[self._aggregate](arr1)
-        if arr2.ndim == 3:
+        if arr2.ndim == 3 and aggregated:
             arr2 = self._aggregs[self._aggregate](arr2)
-        if control is not None and control.ndim == 2:
+        if control is not None and control.ndim == 2 and aggregated:
             control = self._aggregs[self._aggregate](control,control=True) 
         return arr1,arr2,control
 

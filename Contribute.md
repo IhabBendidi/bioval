@@ -15,6 +15,19 @@
 - Add a wiki page for the project
 
 
+--- Distribued tasks :
+- Make intra-class distributed distance metric
+- Add interclass distrubuted metric
+- Integrate into main function
+- Add unit tests for distributed metrics
+- Add FID metric
+- Add KID metric
+- Add IS metric
+- Add intra-class FID and KID metric
+- Make functions for reading images of npz files or folders
+- Make a function to test all metrics on a given dataset
+
+
 --- Control tasks :
 - Write better code documentation after control additions
 - Note that oder of classes and number of classes in input is important to keep as the full classes of data
