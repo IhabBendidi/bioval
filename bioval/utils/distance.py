@@ -1,6 +1,8 @@
 import torch 
 import torch.nn.functional as F
-
+import ot 
+from sklearn.metrics.pairwise import rbf_kernel
+import numpy as np
 def get_distance_functions() -> dict:
     """
     Returns a dictionary of distance functions that can be used in kNN search.
@@ -8,6 +10,7 @@ def get_distance_functions() -> dict:
     Returns:
         dict: A dictionary of distance functions.
     """
+    
     methods = {
             'euclidean': euclidean,
             'cosine': cosine,
@@ -17,6 +20,71 @@ def get_distance_functions() -> dict:
             'cityblock': cityblock
         }
     return methods
+
+def get_distributed_distance_functions() -> dict:
+    """
+    Returns a dictionary of distance functions that can be used in distributed_distance.
+
+    Returns:
+        dict: A dictionary of distance functions.
+    """
+    methods = {'swd': sliced_wasserstein_distance, 
+               'mmd': scalar_mmd, 
+               'kid': KID}
+    return methods
+
+# Takes numpy array as input, degree polynomial is  3 by default can change it with degree=int, can also change gamma if you want
+def KID(x, y, degree: int = 3):
+    x = x.view(x.size(0), -1)
+    y = y.view(y.size(0), -1)  
+    x_kernel = rbf_kernel(x.cpu(), gamma=1 / degree)
+    y_kernel = rbf_kernel(y.cpu(), gamma=1 / degree)
+    mmd = (x_kernel.sum() / (x.size(0) ** 2)) + (y_kernel.sum() / (y.size(0) ** 2)) - 2 * (
+        x_kernel.sum() / (x.size(0) * y.size(0)))
+    # convert to tensor 
+    mmd = torch.tensor(mmd)
+    return mmd.item()
+
+def sliced_wasserstein_distance(x, y, n_projections=50):
+    device = x.device
+    n_points = x.shape[0]
+
+    # Generate random projection vectors
+    random_projections = torch.randn(n_points, n_projections, device=device)
+
+    # Project the data onto the random vectors
+    x_proj = torch.matmul(x, random_projections)
+    y_proj = torch.matmul(y, random_projections)
+
+    # Sort the projected data along the random projection axis
+    x_proj_sorted, _ = torch.sort(x_proj, dim=0)
+    y_proj_sorted, _ = torch.sort(y_proj, dim=0)
+
+    # Compute the Sliced Wasserstein Distance
+    swd = torch.sqrt(torch.sum((x_proj_sorted - y_proj_sorted)**2)) / n_projections
+
+    return swd.item()
+
+
+def mmd_distance(x, y, gamma):
+    xx = torch.exp(-gamma * torch.cdist(x, x))
+    xy = torch.exp(-gamma * torch.cdist(x, y))
+    yy = torch.exp(-gamma * torch.cdist(y, y))
+
+    return xx.mean() + yy.mean() - 2 * xy.mean()
+
+def scalar_mmd(target, transport, gammas=None):
+    if gammas is None:
+        gammas = [2, 1, 0.5, 0.1, 0.01, 0.005]
+
+    def safe_mmd(*args):
+        try:
+            mmd = mmd_distance(*args)
+        except ValueError:
+            mmd = torch.tensor(float('nan'))
+        return mmd
+
+    return torch.mean(torch.stack(list(map(lambda x: safe_mmd(target, transport, x), gammas))), dim=0)
 
 def euclidean(arr1: torch.Tensor, arr2: torch.Tensor) -> torch.Tensor:
     """

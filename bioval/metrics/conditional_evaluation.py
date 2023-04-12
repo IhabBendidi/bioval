@@ -49,16 +49,20 @@ class ConditionalEvaluation():
         A dictionary containing all the available methods for aggregating a 3D tensor into a 2D tensor.
     """
 
-    def __init__(self, method: str = 'euclidean',aggregate: str = 'mean'):
+    def __init__(self, method: str = 'euclidean',aggregate: str = 'mean',distributed_method: str = 'kid'):
         self._method = method
+        self._distributed_method = distributed_method
         self._aggregate = aggregate
         self._methods = distance.get_distance_functions()
+        self._distributed_methods = distance.get_distributed_distance_functions()
         self._aggregs = aggregation.get_aggregation_functions()
         self.inception = models.inception_v3(pretrained=True)
         # Set the model to evaluation mode
         self.inception.eval()
         if self._method not in list(self._methods.keys()):
             raise ValueError(f"Method {self._method} not available. Available methods are {list(self._methods.keys())}")
+        if self._distributed_method not in list(self._distributed_methods.keys()):
+            raise ValueError(f"Distributed method {self._distributed_method} not available. Available methods are {list(self._distributed_methods.keys())}")
         if self._aggregate not in list(self._aggregs.keys()):
             raise ValueError(f"Aggregation method {self._aggregate} not available. Available aggregation methods are {list(self._aggregs.keys())}")
 
@@ -116,7 +120,7 @@ class ConditionalEvaluation():
         self._aggregate = value
 
 
-    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10]) -> dict:
+    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True) -> dict:
         """
         This function is used to compare two tensors and return a dictionary with the scores of each of the three metrics. 
         The comparison is performed based on the method and aggregation set for the class. 
@@ -148,19 +152,19 @@ class ConditionalEvaluation():
 
         """   
         # check if format is correct and prepare data if its in image format
-        arr1,arr2,control = self._prepare_data_format(arr1, arr2,k_range,control)
+        arr1,arr2,control = self._prepare_data_format(arr1, arr2,k_range,control,aggregated)
         dict_score = {}
         #### Control metric
         if control is not None:
             dict_score = self._compute_control_scores(arr1, arr2,control,dict_score)
         #### Inter class metric
-        dict_score = self._compute_interclass_scores(arr1, arr2,dict_score)
+        dict_score = self._compute_interclass_scores(arr1, arr2,dict_score,aggregated)
         #### Intra class metric
-        dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score)
+        dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score,aggregated)
         return dict_score
     
 
-    def _compute_interclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict) -> dict:
+    def _compute_interclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict,aggregated=True) -> dict:
         """
         Computes the interclass scores of two matrices using the specified comparison method.
         Interclass metric is a metric that allows the comparison of classes of two different sets or matrices.
@@ -180,8 +184,10 @@ class ConditionalEvaluation():
 
         """
         #### Inter class metric
+        #if aggregated:
         matrix_1 = self._methods[self._method](arr1, arr1)
         matrix_2 = self._methods[self._method](arr2, arr2)
+        
         # delete the diagonal of each matrix
         matrix_1 = matrix_1[~torch.eye(matrix_1.shape[0], dtype=bool)].view(matrix_1.shape[0], -1)
         matrix_2 = matrix_2[~torch.eye(matrix_2.shape[0], dtype=bool)].view(matrix_2.shape[0], -1)
@@ -199,7 +205,7 @@ class ConditionalEvaluation():
         return output
     
 
-    def _compute_intraclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,output : dict) -> dict:
+    def _compute_intraclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,output : dict,aggregated=True) -> dict:
         """
         Computes the intraclass scores of two matrices using the specified comparison method in the initialization
         of the class. This metric compares the distance between the same class in arr1 and arr2. It also computes distances
@@ -224,7 +230,12 @@ class ConditionalEvaluation():
         output: A dictionary containing the results of the evaluation metric in addition to other metrics computed beforehand.
         """
         # get the matrix for comparison using the specified method
-        matrix = self._methods[self._method](arr1, arr2)
+        
+        if aggregated:
+            matrix = self._methods[self._method](arr1, arr2)
+        else:
+            matrix = self._distributional_distance_matrix(arr1, arr2)
+            #matrix = self._distributed_methods[self._distributed_method](arr1, arr2)
         # compute the diagonal ranks of the comparison matrix
         ranks = self._compute_diag_ranks(matrix)
         # compute the scores for each value in k_range
@@ -466,6 +477,35 @@ class ConditionalEvaluation():
     
 
     
+    def _distributional_distance_matrix(self,x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the distance matrix between two tensors of shape (C, I, F) using the given distance method.
+
+        Args:
+            x (torch.Tensor): First input tensor of shape (C, I, F).
+            y (torch.Tensor): Second input tensor of shape (C, I, F).
+            method (str): The distance method to be used. Can be 'swd' (sliced Wasserstein distance), 'mmd' (maximum mean
+                        discrepancy), or 'kid' (kernel intrinsic discrepancy).
+
+        Returns:
+            torch.Tensor: The distance matrix of shape (C, C).
+        """
+
+        # Compute the distance between each pair of conditions using the given method
+        distance_matrix = np.zeros((x.shape[0], x.shape[0]))
+        for i in range(x.shape[0]):
+            for j in range(x.shape[0]):
+                distance = self._distributed_methods[self._distributed_method](x[i], y[j])
+                distance_matrix[i, j] = distance
+
+        # convert nd array to tensor
+        distance_matrix = torch.from_numpy(distance_matrix)
+
+        return distance_matrix
+
+    
+
+    
     @staticmethod
     def _compute_diag_ranks(matrix: torch.Tensor) -> torch.Tensor:
         """
@@ -541,6 +581,7 @@ if __name__ == '__main__':
     best_gpu = gpu_manager.get_available_gpu()
     
     topk = ConditionalEvaluation()
+    """
 
     # test on 2D tensors
     arr1 = torch.randn(100, 10)
@@ -574,11 +615,13 @@ if __name__ == '__main__':
     start_time = time.time()
     print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
     print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+    """
     
 
 
     if best_gpu is not None:
         # test on 2D tensors
+        """
         arr1 = torch.randn(100, 10)
         arr2 = torch.randn(100, 10)
         arr1 = arr1.cuda(best_gpu)
@@ -676,4 +719,29 @@ if __name__ == '__main__':
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+        """
+
+        # test on 5D tensors on Distributed KID
+        arr1 = torch.randn(30, 20, 10, 10, 3) * 256
+        arr2 = torch.randn(30, 20, 10, 10, 3) * 256
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("5D tensors on GPU, 30 classes, aggregated with mean")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10]))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+
+        # test on 5D tensors on Distributed KID
+        arr1 = torch.randn(30, 20, 10, 10, 3) * 256
+        arr2 = torch.randn(30, 20, 10, 10, 3) * 256
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        print("5D tensors on GPU, 30 classes, Distributed KID")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+
+        
 
