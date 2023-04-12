@@ -16,7 +16,6 @@
 
 
 --- Distribued tasks :
-- Make intra-class distributed distance metric
 - Add interclass distrubuted metric
 - Integrate into main function
 - Add unit tests for distributed metrics

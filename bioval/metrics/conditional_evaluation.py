@@ -733,10 +733,10 @@ if __name__ == '__main__':
 
 
         # test on 5D tensors on Distributed KID
-        arr1 = torch.randn(30, 20, 10, 10, 3) * 256
-        arr2 = torch.randn(30, 20, 10, 10, 3) * 256
-        arr1 = arr1.cuda(best_gpu)
-        arr2 = arr2.cuda(best_gpu)
+        #arr1 = torch.randn(30, 20, 10, 10, 3) * 256
+        #arr2 = torch.randn(30, 20, 10, 10, 3) * 256
+        #arr1 = arr1.cuda(best_gpu)
+        #arr2 = arr2.cuda(best_gpu)
         print("5D tensors on GPU, 30 classes, Distributed KID")
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False))
