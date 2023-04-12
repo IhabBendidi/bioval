@@ -3,6 +3,10 @@ import torch.nn.functional as F
 import ot 
 from sklearn.metrics.pairwise import rbf_kernel
 import numpy as np
+
+
+# TODO : Fix error in sliced wasserstein distance
+
 def get_distance_functions() -> dict:
     """
     Returns a dictionary of distance functions that can be used in kNN search.
@@ -28,8 +32,7 @@ def get_distributed_distance_functions() -> dict:
     Returns:
         dict: A dictionary of distance functions.
     """
-    methods = {'swd': sliced_wasserstein_distance, 
-               'mmd': scalar_mmd, 
+    methods = {'mmd': scalar_mmd, 
                'kid': KID}
     return methods
 
