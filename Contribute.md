@@ -16,13 +16,7 @@
 - Fix wasserstein sliced distance for distributed
 
 --- Distribued tasks :
-- Add interclass distrubuted metric
-- Integrate into main function
-- Add unit tests for distributed metrics
-- Add FID metric
-- Add KID metric
-- Add IS metric
-- Add intra-class FID and KID metric
+- Add distributed to control tasks
 - Make functions for reading images of npz files or folders
 - Make a function to test all metrics on a given dataset
 

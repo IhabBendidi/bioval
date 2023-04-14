@@ -241,9 +241,12 @@ class ConditionalEvaluation():
         
         if aggregated:
             matrix = self._methods[self._method](arr1, arr2)
+            
         else:
             matrix = self._distributional_distance_matrix(arr1, arr2)
-            #matrix = self._distributed_methods[self._distributed_method](arr1, arr2)
+            # Compute the mean of diagonal values
+            mean_diag = torch.mean(torch.diag(matrix))
+            output["intra_kid"] = mean_diag.item()
         # compute the diagonal ranks of the comparison matrix
         ranks = self._compute_diag_ranks(matrix)
         # compute the scores for each value in k_range
@@ -254,12 +257,13 @@ class ConditionalEvaluation():
             number_values = k 
             r = (ranks <= number_values).sum()
             r = (r/matrix.shape[0]) * 100
-            output['intra_top'+str(k)] = r
+            output['intra_top'+str(k)] = r.item()
         # add the mean ranks score to the dictionary
-        output['mean_ranks'] = (mean_ranks/matrix.shape[0]) * 100
+        output['mean_ranks'] = ((mean_ranks/matrix.shape[0]) * 100).item()
         # add the exact matching score to the dictionary
         r_exact = (ranks == 1).sum()
-        output['exact_matching'] = (r_exact/matrix.shape[0]) * 100
+        output['exact_matching'] = ((r_exact/matrix.shape[0]) * 100).item()
+        
         return output
 
 
