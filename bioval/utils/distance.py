@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import ot 
 from sklearn.metrics.pairwise import rbf_kernel
 import numpy as np
+from piq import KID
 
 
 # TODO : Fix error in sliced wasserstein distance
@@ -33,20 +34,34 @@ def get_distributed_distance_functions() -> dict:
         dict: A dictionary of distance functions.
     """
     methods = {'mmd': scalar_mmd, 
-               'kid': KID}
+               'kid': compute_KID}
     return methods
 
+def compute_KID(x,y,degree: int = 3):
+
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #x=torch.tensor(x).to(device)
+    #y=torch.tensor(y).to(device)
+    kid_metric=KID(degree)
+    kid= kid_metric(x,y)
+    kid=kid.item()
+    return kid
+"""
 # Takes numpy array as input, degree polynomial is  3 by default can change it with degree=int, can also change gamma if you want
 def KID(x, y, degree: int = 3):
     x = x.view(x.size(0), -1)
-    y = y.view(y.size(0), -1)  
+    y = y.view(y.size(0), -1)
     x_kernel = rbf_kernel(x.cpu(), gamma=1 / degree)
     y_kernel = rbf_kernel(y.cpu(), gamma=1 / degree)
+    
+    xy_kernel = rbf_kernel(x.cpu(), y.cpu(), gamma=1 / degree)
+
     mmd = (x_kernel.sum() / (x.size(0) ** 2)) + (y_kernel.sum() / (y.size(0) ** 2)) - 2 * (
-        x_kernel.sum() / (x.size(0) * y.size(0)))
-    # convert to tensor 
+        xy_kernel.sum() / (x.size(0) * y.size(0)))
+    
     mmd = torch.tensor(mmd)
     return mmd.item()
+"""
 
 def sliced_wasserstein_distance(x, y, n_projections=50):
     device = x.device

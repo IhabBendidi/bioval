@@ -156,7 +156,12 @@ class ConditionalEvaluation():
         dict_score = {}
         #### Control metric
         if control is not None:
-            dict_score = self._compute_control_scores(arr1, arr2,control,dict_score)
+            if aggregated:
+                dict_score = self._compute_control_scores(arr1, arr2,control,dict_score)
+            else:
+                # Mention that control metric is not available for non aggregated data yet in an warning message
+                pass
+                
         #### Inter class metric
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score,aggregated)
         #### Intra class metric
@@ -184,9 +189,12 @@ class ConditionalEvaluation():
 
         """
         #### Inter class metric
-        #if aggregated:
-        matrix_1 = self._methods[self._method](arr1, arr1)
-        matrix_2 = self._methods[self._method](arr2, arr2)
+        if aggregated:
+            matrix_1 = self._methods[self._method](arr1, arr1)
+            matrix_2 = self._methods[self._method](arr2, arr2)
+        else:
+            matrix_1 = self._distributional_distance_matrix(arr1, arr1)
+            matrix_2 = self._distributional_distance_matrix(arr2, arr2)
         
         # delete the diagonal of each matrix
         matrix_1 = matrix_1[~torch.eye(matrix_1.shape[0], dtype=bool)].view(matrix_1.shape[0], -1)
@@ -503,6 +511,12 @@ class ConditionalEvaluation():
 
         return distance_matrix
 
+
+
+
+
+
+
     
 
     
@@ -720,16 +734,18 @@ if __name__ == '__main__':
         print(topk(arr1, arr2, k_range=[1, 5, 10]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
         """
-
+        
         # test on 5D tensors on Distributed KID
         arr1 = torch.randn(30, 20, 10, 10, 3) * 256
         arr2 = torch.randn(30, 20, 10, 10, 3) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
+        
         print("5D tensors on GPU, 30 classes, aggregated with mean")
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+        
 
 
         # test on 5D tensors on Distributed KID
@@ -742,7 +758,7 @@ if __name__ == '__main__':
         print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
-
+        
         # test on 5D tensors on Distributed KID
         arr1 = torch.randn(30, 10, 256)
         arr2 = torch.randn(30, 10, 256)
@@ -763,6 +779,7 @@ if __name__ == '__main__':
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+        
 
 
         

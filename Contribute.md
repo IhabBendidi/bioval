@@ -13,7 +13,7 @@
 - Add wiki files that explain usage and eaxmples and docs of the code
 - Automate github actions to test automatically the code in containers after each push
 - Add a wiki page for the project
-
+- Fix wasserstein sliced distance for distributed
 
 --- Distribued tasks :
 - Add interclass distrubuted metric

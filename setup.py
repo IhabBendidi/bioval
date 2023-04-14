@@ -13,6 +13,7 @@ setup(
         'torchvision',
         'Pillow',
         'nvidia-ml-py',
+        'piq',
         'poetry',
     ],
     classifiers=[
