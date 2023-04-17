@@ -3,3 +3,4 @@ torch
 torchvision
 Pillow
 nvidia-ml-py
+piq

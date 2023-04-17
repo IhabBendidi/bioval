@@ -12,6 +12,7 @@ torch = "*"
 torchvision = "*"
 Pillow = "*"
 nvidia-ml-py = "*"
+piq = "*"
 
 [build-system]
 requires = ["poetry-core"]

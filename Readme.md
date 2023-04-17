@@ -37,8 +37,18 @@ print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 ## Available Metrics
 The following evaluation metrics are available in Bioval:
 
-### Conditional Evaluation
+### IntraClass Conditional Evaluation
 This metric measures the top-k similarity between two tensors, both within and across classes. The metric returns the following scores: intra_top1, intra_top5, inter_corr, inter_p, mean_ranks, and exact_matching.
+
+### InterClass Conditional Evaluation
+Other evaluation metricswill soon be also available in Bioval. Please refer to the documentation for details on how to use these metrics.
+
+### Distance from Control
+Other evaluation metricswill soon be also available in Bioval. Please refer to the documentation for details on how to use these metrics.
+
+### Usage 
+
+#### Aggregated 
 
 ```python
 from bioval.metrics import ConditionalEvaluation
@@ -52,8 +62,16 @@ arr2 = torch.randn(100, 10)
 scores = topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100])
 ```
 
-### Other Metrics
-Other evaluation metricswill soon be also available in Bioval. Please refer to the documentation for details on how to use these metrics.
+#### Distributed 
+```python
+
+from bioval.metrics import ConditionalEvaluation
+
+topk = ConditionalEvaluation(distributed_method='fid') # or 'kid' or 'mmd'
+arr1 = torch.randn(30, 20, 10, 10, 3) * 256
+arr2 = torch.randn(30, 20, 10, 10, 3) * 256
+print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False)) # returns a dict of scores
+```
 
 ## Documentation
 Please refer to the docstrings in the code for detailed documentation on each metric.
