@@ -246,7 +246,7 @@ class ConditionalEvaluation():
             matrix = self._distributional_distance_matrix(arr1, arr2)
             # Compute the mean of diagonal values
             mean_diag = torch.mean(torch.diag(matrix))
-            output["intra_kid"] = mean_diag.item()
+            output["intra_" + self._distributed_method] = mean_diag.item()
         # compute the diagonal ranks of the comparison matrix
         ranks = self._compute_diag_ranks(matrix)
         # compute the scores for each value in k_range
@@ -598,7 +598,7 @@ if __name__ == '__main__':
     
     best_gpu = gpu_manager.get_available_gpu()
     
-    topk = ConditionalEvaluation()
+    topk = ConditionalEvaluation(distributed_method='fid')
     """
 
     # test on 2D tensors

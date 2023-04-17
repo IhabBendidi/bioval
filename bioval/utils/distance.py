@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import ot 
 from sklearn.metrics.pairwise import rbf_kernel
 import numpy as np
-from piq import KID
+from piq import KID,FID
 
 
 # TODO : Fix error in sliced wasserstein distance
@@ -34,7 +34,8 @@ def get_distributed_distance_functions() -> dict:
         dict: A dictionary of distance functions.
     """
     methods = {'mmd': scalar_mmd, 
-               'kid': compute_KID}
+               'kid': compute_KID,
+               'fid': compute_FID}
     return methods
 
 def compute_KID(x,y,degree: int = 3):
@@ -47,6 +48,15 @@ def compute_KID(x,y,degree: int = 3):
     kid=kid.item()
     return kid
 
+def compute_FID(x,y):
+
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #x=torch.tensor(x).to(device)
+    #y=torch.tensor(y).to(device)
+    fid_metric=FID()
+    fid= fid_metric(x,y)
+    fid=fid.item()
+    return fid
 
 def sliced_wasserstein_distance(x, y, n_projections=50):
     device = x.device
