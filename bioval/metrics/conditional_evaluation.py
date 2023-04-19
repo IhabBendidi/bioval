@@ -120,7 +120,7 @@ class ConditionalEvaluation():
         self._aggregate = value
 
 
-    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True) -> dict:
+    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True,detailed_output=True) -> dict:
         """
         This function is used to compare two tensors and return a dictionary with the scores of each of the three metrics. 
         The comparison is performed based on the method and aggregation set for the class. 
@@ -156,20 +156,20 @@ class ConditionalEvaluation():
         dict_score = {}
         #### Control metric
         if control is not None:
-            if aggregated:
-                dict_score = self._compute_control_scores(arr1, arr2,control,dict_score)
-            else:
+            #if aggregated:
+            dict_score = self._compute_control_scores(arr1, arr2,control,dict_score,aggregated,detailed_output)
+            #else:
                 # Mention that control metric is not available for non aggregated data yet in an warning message
-                pass
+                #pass
                 
         #### Inter class metric
-        dict_score = self._compute_interclass_scores(arr1, arr2,dict_score,aggregated)
+        dict_score = self._compute_interclass_scores(arr1, arr2,dict_score,aggregated,detailed_output)
         #### Intra class metric
-        dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score,aggregated)
+        dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score,aggregated,detailed_output)
         return dict_score
     
 
-    def _compute_interclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict,aggregated=True) -> dict:
+    def _compute_interclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict,aggregated=True,detailed_output=True) -> dict:
         """
         Computes the interclass scores of two matrices using the specified comparison method.
         Interclass metric is a metric that allows the comparison of classes of two different sets or matrices.
@@ -209,7 +209,8 @@ class ConditionalEvaluation():
 
         # add the correlation score to the dictionary
         output['inter_corr'] = corr
-        output['inter_p'] = pvalue
+        if detailed_output == True :
+            output['inter_p'] = pvalue
         return output
     
 
@@ -260,17 +261,18 @@ class ConditionalEvaluation():
             r = (ranks <= number_values).sum()
             r = (r/matrix.shape[0]) * 100
             output['intra_top'+str(k)] = r.item()
-        # add the mean ranks score to the dictionary
-        output['mean_ranks'] = ((mean_ranks/matrix.shape[0]) * 100).item()
-        # add the exact matching score to the dictionary
-        r_exact = (ranks == 1).sum()
-        output['exact_matching'] = ((r_exact/matrix.shape[0]) * 100).item()
+        if detailed_output == True :
+            # add the mean ranks score to the dictionary
+            output['mean_ranks'] = ((mean_ranks/matrix.shape[0]) * 100).item()
+            # add the exact matching score to the dictionary
+            r_exact = (ranks == 1).sum()
+            output['exact_matching'] = ((r_exact/matrix.shape[0]) * 100).item()
         
         
         return output
 
 
-    def _compute_control_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,control: torch.Tensor,output : dict) -> dict:
+    def _compute_control_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,control: torch.Tensor,output : dict,aggregated=True,detailed_output=True) -> dict:
         """
         Computes the control scores of two matrices with control using the specified comparison method. We compute 
         the distance between the control and the vector representing each class of the first array to get an array of distances.
@@ -287,19 +289,39 @@ class ConditionalEvaluation():
 
         output: A dictionary containing the results of the evaluation metrics computed by the function.
         """
-        # Compute the distances between the control and the vectors of each class of the first array
-        dist1 = torch.norm(arr1 - control, dim=-1)
-        # Compute the distances between the control and the vectors of each class of the second array
-        dist2 = torch.norm(arr2 - control, dim=-1)
-        
-        # Compute the euclidean distance between each element of the two arrays of distances
-        score = torch.abs(dist1 - dist2)
-        # Add all classes scores to a new dictionary inside existing dictionary :
-        output['class_control_scores'] = score.tolist()
-        # Compute the euclidean distance between the two arrays of distances
-        score = torch.norm(dist1 - dist2, p=2)
-        # add the control score to the dictionary
-        output['control_score'] = score.item()
+        if aggregated :
+            # Compute the distances between the control and the vectors of each class of the first array
+            dist1 = torch.norm(arr1 - control, dim=-1)
+            # Compute the distances between the control and the vectors of each class of the second array
+            dist2 = torch.norm(arr2 - control, dim=-1)
+
+            if detailed_output == True :
+                # Compute the euclidean distance between each element of the two arrays of distances
+                score = torch.abs(dist1 - dist2)
+                # Add all classes scores to a new dictionary inside existing dictionary :
+                output['class_control_scores'] = score.tolist()
+            # Compute the euclidean distance between the two arrays of distances
+            score = torch.norm(dist1 - dist2, p=2)
+            # add the control score to the dictionary
+            output['control_score'] = score.item()
+        else :
+            distance_matrix_1 = np.zeros(arr1.shape[0])
+            for i in range(arr1.shape[0]):
+                distance = self._distributed_methods[self._distributed_method](arr1[i], control)
+                distance_matrix_1[i] = distance
+            distance_matrix_2 = np.zeros(arr2.shape[0])
+            for i in range(arr2.shape[0]):
+                distance = self._distributed_methods[self._distributed_method](arr2[i], control)
+                distance_matrix_2[i] = distance
+            # compute the euclidean distance between the two arrays of distances
+            score = torch.norm(torch.from_numpy(distance_matrix_1) - torch.from_numpy(distance_matrix_2), p=2)
+            # add the control score to the dictionary
+            output['control_score'] = score.item()
+            if detailed_output:
+                # compute euclidean distance between each element of the two arrays of distances
+                score = torch.abs(torch.from_numpy(distance_matrix_1) - torch.from_numpy(distance_matrix_2))
+                # add all classes scores to a new dictionary inside existing dictionary :
+                output['class_control_scores'] = score.tolist()
 
         return output
 
@@ -601,7 +623,7 @@ if __name__ == '__main__':
     
     best_gpu = gpu_manager.get_available_gpu()
     
-    topk = ConditionalEvaluation(distributed_method='fid')
+    topk = ConditionalEvaluation(distributed_method='kid')
     """
 
     # test on 2D tensors
@@ -750,7 +772,7 @@ if __name__ == '__main__':
         
         print("5D tensors on GPU, 30 classes, aggregated with mean")
         start_time = time.time()
-        print(topk(arr1, arr2, k_range=[1, 5, 10]))
+        print(topk(arr1, arr2, k_range=[1, 5, 10],detailed_output=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
         
 
@@ -762,10 +784,10 @@ if __name__ == '__main__':
         #arr2 = arr2.cuda(best_gpu)
         print("5D tensors on GPU, 30 classes, Distributed KID")
         start_time = time.time()
-        print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False))
+        print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False,detailed_output=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 
-        
+        """
         # test on 5D tensors on Distributed KID
         arr1 = torch.randn(30, 10, 256)
         arr2 = torch.randn(30, 10, 256)
@@ -785,6 +807,20 @@ if __name__ == '__main__':
         print("3D tensors on GPU, 30 classes, Distributed KID")
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+        """
+
+        # test on 4D tensors with 4D control
+        arr1 = torch.randn(30,20, 10, 10,3) * 256
+        arr2 = torch.randn(30,20, 10, 10, 3) * 256
+        control = torch.randn(20,10, 10, 3) * 256
+        # pass the arrays to first gpu
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        control = control.cuda(best_gpu)
+        print("5D tensors on GPU + 4D control on GPU")
+        start_time = time.time()
+        print(topk(arr1, arr2, control=control,k_range=[1, 5, 10],detailed_output=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
         
 
