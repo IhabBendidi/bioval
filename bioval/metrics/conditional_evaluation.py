@@ -820,7 +820,7 @@ if __name__ == '__main__':
         control = control.cuda(best_gpu)
         print("5D tensors on GPU + 4D control on GPU")
         start_time = time.time()
-        print(topk(arr1, arr2, control=control,k_range=[1, 5, 10],detailed_output=False))
+        print(topk(arr1, arr2, control=control,k_range=[1, 5, 10],aggregated=False,detailed_output=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
         
 
