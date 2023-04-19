@@ -213,7 +213,7 @@ class ConditionalEvaluation():
         return output
     
 
-    def _compute_intraclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,output : dict,aggregated=True) -> dict:
+    def _compute_intraclass_scores(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,output : dict,aggregated=True,detailed_output=True) -> dict:
         """
         Computes the intraclass scores of two matrices using the specified comparison method in the initialization
         of the class. This metric compares the distance between the same class in arr1 and arr2. It also computes distances
@@ -247,6 +247,8 @@ class ConditionalEvaluation():
             # Compute the mean of diagonal values
             mean_diag = torch.mean(torch.diag(matrix))
             output["intra_" + self._distributed_method] = mean_diag.item()
+        if detailed_output == True :
+            output['matrix'] = matrix
         # compute the diagonal ranks of the comparison matrix
         ranks = self._compute_diag_ranks(matrix)
         # compute the scores for each value in k_range
@@ -263,6 +265,7 @@ class ConditionalEvaluation():
         # add the exact matching score to the dictionary
         r_exact = (ranks == 1).sum()
         output['exact_matching'] = ((r_exact/matrix.shape[0]) * 100).item()
+        
         
         return output
 

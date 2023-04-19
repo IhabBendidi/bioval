@@ -15,6 +15,8 @@ setup(
         'nvidia-ml-py',
         'piq',
         'poetry',
+        'scikit-learn',
+        'pot',
     ],
     classifiers=[
         'Programming Language :: Python :: 3',
