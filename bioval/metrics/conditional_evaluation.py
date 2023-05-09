@@ -295,15 +295,13 @@ class ConditionalEvaluation():
             # Compute the distances between the control and the vectors of each class of the second array
             dist2 = torch.norm(arr2 - control, dim=-1)
 
-            if detailed_output == True :
-                # Compute the euclidean distance between each element of the two arrays of distances
-                score = torch.abs(dist1 - dist2)
-                # Add all classes scores to a new dictionary inside existing dictionary :
-                output['class_control_scores'] = score.tolist()
-            # Compute the euclidean distance between the two arrays of distances
-            score = torch.norm(dist1 - dist2, p=2)
-            # add the control score to the dictionary
-            output['control_score'] = score.item()
+          
+            # Compute the euclidean distance between each element of the two arrays of distances
+            score = torch.abs(dist1 - dist2)
+            # Add all classes scores to a new dictionary inside existing dictionary :
+            output['class_control_scores'] = score.tolist()
+            output['control_score'] = np.mean(score)
+
         else :
             distance_matrix_1 = np.zeros(arr1.shape[0])
             for i in range(arr1.shape[0]):
@@ -313,15 +311,14 @@ class ConditionalEvaluation():
             for i in range(arr2.shape[0]):
                 distance = self._distributed_methods[self._distributed_method](arr2[i], control)
                 distance_matrix_2[i] = distance
-            # compute the euclidean distance between the two arrays of distances
-            score = torch.norm(torch.from_numpy(distance_matrix_1) - torch.from_numpy(distance_matrix_2), p=2)
-            # add the control score to the dictionary
-            output['control_score'] = score.item()
-            if detailed_output:
-                # compute euclidean distance between each element of the two arrays of distances
-                score = torch.abs(torch.from_numpy(distance_matrix_1) - torch.from_numpy(distance_matrix_2))
-                # add all classes scores to a new dictionary inside existing dictionary :
-                output['class_control_scores'] = score.tolist()
+            
+            
+            
+            # compute euclidean distance between each element of the two arrays of distances
+            score = torch.abs(torch.from_numpy(distance_matrix_1) - torch.from_numpy(distance_matrix_2))
+            # add all classes scores to a new dictionary inside existing dictionary :
+            output['class_control_scores'] = score.tolist()
+            output['control_score'] = np.mean(score)
 
         return output
 
