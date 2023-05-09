@@ -501,14 +501,31 @@ class ConditionalEvaluation():
         # transfer images to the device of the inception model
         images = images.to(device)
         # Forward pass the images through the model
-        with torch.no_grad():
-            embeddings = self.inception(images).detach()
+        embeddings = self._process_images_in_batches(images, self.inception, device, batch_size=32)
+        #with torch.no_grad():
+            #embeddings = self.inception(images).detach()
         if len(original_shape) == 5:
             embeddings = embeddings.reshape(original_shape[0],original_shape[1],-1 )
         elif len(original_shape) == 4:
             embeddings = embeddings.reshape(images.shape[0], -1)
         return embeddings
     
+    def _process_images_in_batches(images, inception, device, batch_size=32):
+        num_images = len(images)
+        embeddings = []
+
+        for i in range(0, num_images, batch_size):
+            batch_images = images[i:i + batch_size].to(device)
+
+            with torch.no_grad():
+                batch_embeddings = inception(batch_images).detach()
+
+            embeddings.append(batch_embeddings)
+
+        # Concatenate all the embeddings
+        embeddings = torch.cat(embeddings, dim=0)
+
+        return embeddings
 
     
     def _distributional_distance_matrix(self,x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
