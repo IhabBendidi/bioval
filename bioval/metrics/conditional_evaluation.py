@@ -120,7 +120,7 @@ class ConditionalEvaluation():
         self._aggregate = value
 
 
-    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True,detailed_output=True) -> dict:
+    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True,detailed_output=True,batch_size = 256) -> dict:
         """
         This function is used to compare two tensors and return a dictionary with the scores of each of the three metrics. 
         The comparison is performed based on the method and aggregation set for the class. 
@@ -152,7 +152,7 @@ class ConditionalEvaluation():
 
         """   
         # check if format is correct and prepare data if its in image format
-        arr1,arr2,control = self._prepare_data_format(arr1, arr2,k_range,control,aggregated)
+        arr1,arr2,control = self._prepare_data_format(arr1, arr2,k_range,control,aggregated,batch_size)
         dict_score = {}
         #### Control metric
         if control is not None:
@@ -304,7 +304,7 @@ class ConditionalEvaluation():
             score = torch.abs(dist1 - dist2)
             # Add all classes scores to a new dictionary inside existing dictionary :
             output['class_control_scores'] = score.tolist()
-            output['control_score'] = np.mean(score)
+            output['control_score'] = torch.mean(score).item()
 
         else :
             distance_matrix_1 = np.zeros(arr1.shape[0])
@@ -322,11 +322,13 @@ class ConditionalEvaluation():
             score = torch.abs(torch.from_numpy(distance_matrix_1) - torch.from_numpy(distance_matrix_2))
             # add all classes scores to a new dictionary inside existing dictionary :
             output['class_control_scores'] = score.tolist()
-            output['control_score'] = np.mean(score)
+            # compute the mean of the scores wityh torch
+            output['control_score'] = torch.mean(score).item()
+
 
         return output
 
-    def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None,aggregated=True) -> tuple:
+    def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None,aggregated=True,batch_size = 256) -> tuple:
 
         """
         Checks the input tensors, raises an error if they are not torch.Tensors, 
@@ -420,13 +422,13 @@ class ConditionalEvaluation():
         # here the code for inception model
         if arr1.ndim in [4,5] :
             # call inception function
-            arr1 = self._extract_inception_embeddings(arr1)
+            arr1 = self._extract_inception_embeddings(arr1,batch_size)
         if arr2.ndim in [4,5] :
             # call inception function
-            arr2 = self._extract_inception_embeddings(arr2)
+            arr2 = self._extract_inception_embeddings(arr2,batch_size)
         if control is not None and control.ndim in [3,4] :
             # call inception function
-            control = self._extract_inception_embeddings(control)
+            control = self._extract_inception_embeddings(control,batch_size)
         # control if both tensors have the same shape for the embedding dimension (if vector of size 2D or 3D)
         if arr1.ndim in [2, 3] and arr2.ndim in [2, 3] and arr1.shape[-1] != arr2.shape[-1]:
             raise ValueError(f"First tensor and second tensor should have the same number of features in dimension -1 but got {arr1.shape[-1]} and {arr2.shape[-1]} respectively")
@@ -447,7 +449,7 @@ class ConditionalEvaluation():
         return arr1,arr2,control
 
 
-    def _extract_inception_embeddings(self,images: torch.Tensor)  -> torch.Tensor:
+    def _extract_inception_embeddings(self,images: torch.Tensor,batch_size = 256)  -> torch.Tensor:
         """
         Extract Inception embeddings from a batch of images.
 
@@ -502,32 +504,46 @@ class ConditionalEvaluation():
         images = images.astype(np.uint8)
         images = [Image.fromarray(image.astype(np.uint8)) for image in images]
         images = torch.stack([transform(image) for image in images])
-        # transfer images to the device of the inception model
-        images = images.to(device)
+
+        images_shape = images.shape
+        
         # Forward pass the images through the model
-        embeddings = self._process_images_in_batches(images, self.inception, device, batch_size=32)
+        embeddings = self._process_images_in_batches(images, self.inception, device, batch_size)
+
+
         #with torch.no_grad():
             #embeddings = self.inception(images).detach()
         if len(original_shape) == 5:
             embeddings = embeddings.reshape(original_shape[0],original_shape[1],-1 )
         elif len(original_shape) == 4:
-            embeddings = embeddings.reshape(images.shape[0], -1)
+            embeddings = embeddings.reshape(images_shape[0], -1)
         return embeddings
     
-    def _process_images_in_batches(images, inception, device, batch_size=32):
+    def _process_images_in_batches(self,images, inception, device, batch_size):
         num_images = len(images)
         embeddings = []
+        
+        with torch.no_grad():
+            for i in range(0, num_images, batch_size):
+                batch_images = images[i:i + min(batch_size, num_images - i)]
 
-        for i in range(0, num_images, batch_size):
-            batch_images = images[i:i + batch_size].to(device)
-
-            with torch.no_grad():
+                batch_images = batch_images.to(device)
+ 
                 batch_embeddings = inception(batch_images).detach()
 
-            embeddings.append(batch_embeddings)
+                del batch_images
+
+                # transfer batch embeddings to cpu
+                batch_embeddings = batch_embeddings.cpu()
+
+                embeddings.append(batch_embeddings)
+
 
         # Concatenate all the embeddings
         embeddings = torch.cat(embeddings, dim=0)
+
+        # transfer embeddings to the device
+        embeddings = embeddings.to(device)
 
         return embeddings
 
@@ -783,8 +799,8 @@ if __name__ == '__main__':
         """
         
         # test on 5D tensors on Distributed KID
-        arr1 = torch.randn(30, 20, 10, 10, 3) * 256
-        arr2 = torch.randn(30, 20, 10, 10, 3) * 256
+        arr1 = torch.randn(100, 100, 256, 256, 3) * 256
+        arr2 = torch.randn(100, 100, 256, 256, 3) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         
@@ -829,9 +845,9 @@ if __name__ == '__main__':
         """
 
         # test on 4D tensors with 4D control
-        arr1 = torch.randn(30,20, 10, 10,3) * 256
-        arr2 = torch.randn(30,20, 10, 10, 3) * 256
-        control = torch.randn(20,10, 10, 3) * 256
+        arr1 = torch.randn(100,100, 256, 256,3) * 256
+        arr2 = torch.randn(100,100, 256, 256, 3) * 256
+        control = torch.randn(100,256, 256, 3) * 256
         # pass the arrays to first gpu
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
