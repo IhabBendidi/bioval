@@ -195,6 +195,10 @@ class ConditionalEvaluation():
         else:
             matrix_1 = self._distributional_distance_matrix(arr1, arr1)
             matrix_2 = self._distributional_distance_matrix(arr2, arr2)
+
+        if detailed_output == True :
+            output['interclass_matrix_1'] = matrix_1
+            output['interclass_matrix_2'] = matrix_2
         
         # delete the diagonal of each matrix
         matrix_1 = matrix_1[~torch.eye(matrix_1.shape[0], dtype=bool)].view(matrix_1.shape[0], -1)
