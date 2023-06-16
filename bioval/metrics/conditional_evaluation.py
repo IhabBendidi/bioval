@@ -56,9 +56,10 @@ class ConditionalEvaluation():
         self._methods = distance.get_distance_functions()
         self._distributed_methods = distance.get_distributed_distance_functions()
         self._aggregs = aggregation.get_aggregation_functions()
-        self.inception = models.inception_v3(pretrained=True)
+        self.inception = models.inception_v3(pretrained=True, transform_input=False)
+        # delete last layer of inception
         # Set the model to evaluation mode
-        self.inception.eval()
+        self.inception.fc = torch.nn.Identity()
         if self._method not in list(self._methods.keys()):
             raise ValueError(f"Method {self._method} not available. Available methods are {list(self._methods.keys())}")
         if self._distributed_method not in list(self._distributed_methods.keys()):
@@ -517,6 +518,7 @@ class ConditionalEvaluation():
             embeddings = embeddings.reshape(original_shape[0],original_shape[1],-1 )
         elif len(original_shape) == 4:
             embeddings = embeddings.reshape(images_shape[0], -1)
+        print(embeddings.shape)
         return embeddings
     
     def _process_images_in_batches(self,images, inception, device, batch_size):
@@ -529,7 +531,8 @@ class ConditionalEvaluation():
 
                 batch_images = batch_images.to(device)
  
-                batch_embeddings = inception(batch_images).detach()
+                batch_embeddings,_ = inception(batch_images)
+                batch_embeddings = batch_embeddings.detach()
 
                 del batch_images
 
@@ -799,8 +802,8 @@ if __name__ == '__main__':
         """
         
         # test on 5D tensors on Distributed KID
-        arr1 = torch.randn(100, 100, 256, 256, 3) * 256
-        arr2 = torch.randn(100, 100, 256, 256, 3) * 256
+        arr1 = torch.randn(10, 100, 256, 256, 3) * 256
+        arr2 = torch.randn(10, 100, 256, 256, 3) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         
@@ -845,9 +848,9 @@ if __name__ == '__main__':
         """
 
         # test on 4D tensors with 4D control
-        arr1 = torch.randn(100,100, 256, 256,3) * 256
-        arr2 = torch.randn(100,100, 256, 256, 3) * 256
-        control = torch.randn(100,256, 256, 3) * 256
+        arr1 = torch.randn(10,10, 256, 256,3) * 256
+        arr2 = torch.randn(10,10, 256, 256, 3) * 256
+        control = torch.randn(10,256, 256, 3) * 256
         # pass the arrays to first gpu
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)

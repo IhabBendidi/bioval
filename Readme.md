@@ -1,5 +1,7 @@
 # Bioval
-Bioval is a Python package that provides a collection of evaluation metrics for comparing the similarity of two tensors. The package supports tensors of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where N is the number of classes, I is the number of instances, H is the height, W is the width, C is the number of channels, and F is the number of features.
+Bioval is a Python package made to provide an easy access to a collection of evaluation metrics for comparing the similarity of two tensors, adapted to different evaluation processes of generative models applied to both natural images and biological images. The package support unconditional generation cases, in which we have no labels separating different classes/conditions, and also supports conditional generation, with metrics adapted to evaluating the appropriateness of the generated images to all the distributions of real conditions. The package also supports distance from the real negative control condition, used in most biological contexts.
+
+The package supports tensors of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where N is the number of classes/conditions, I is the number of instances, H is the height, W is the width, C is the number of channels, and F is the number of features.
 
 ## Installation
 Bioval can be installed from PyPI using the following command:
@@ -9,8 +11,24 @@ poetry build
 pip3 install dist/bioval-{version_number}.tar.gz
 ```
 
+Pypip installation will be supported soon.
+
+## Available Global Metrics
+The following evaluation metrics are available in Bioval:
+
+### IntraClass Conditional Evaluation
+This metric measures the top-k similarity between two tensors, both within and across classes. The metric returns the following scores: intra_top1, intra_top5, and intra_top10. In a detailled output context, it also returns the distance matrix between all generated and true conditions, computed according to the chosen distance method.
+
+### InterClass Conditional Evaluation
+This metric evaluates the pearson correlation between the distances between generated classes and the distance between real classes. This evaluates if the generated class images keep the same class relationships and distances. This metric returns inter_corr and in a detailled output context, returns also inter_p.
+
+### Distance from Control
+This metric evaluates the difference between the distances of both generated class images and real class images from real control compounds, to measure if their relationship with the control compound (DMSO for example) is preserved. The metric returns the mean difference between the distance of real and generated conditions from control, as well as the individual difference for each class in the detailled output. 
+
+
+
 ## Usage
-To use Bioval, create an instance of one of the evaluation classes, and call the __call__ method, passing in two tensors and a range of k values:
+To use Bioval :
 
 ```python
 from bioval.metrics.conditional_evaluation import ConditionalEvaluation
@@ -33,18 +51,6 @@ start_time = time.time()
 print(topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100]))
 print("Time elapsed: {:.2f}s".format(time.time() - start_time))
 ```
-
-## Available Metrics
-The following evaluation metrics are available in Bioval:
-
-### IntraClass Conditional Evaluation
-This metric measures the top-k similarity between two tensors, both within and across classes. The metric returns the following scores: intra_top1, intra_top5, inter_corr, inter_p, mean_ranks, and exact_matching.
-
-### InterClass Conditional Evaluation
-This metric evaluates the pearson correlation between the distances between generated classes and the distance between real classes. This evaluates if the generated class images keep the same class relationships and distances.
-
-### Distance from Control
-This metric evaluates the difference between the distances of both generated class images and real class images from real control compounds, to measure if their relationship with the control compound (DMSO for example) is preserved.
 
 ### Usage 
 
