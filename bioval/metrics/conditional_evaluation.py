@@ -476,11 +476,17 @@ class ConditionalEvaluation():
             ValueError: If the input image shape is not 4 or 5 dimensional.
 
         """
+        normalisation_values = [0.485, 0.456, 0.406] 
+        # add the number of channels to the normalisation values, by adding 0.406 to the list for each additional channel beyond 3, and deleting some normalisation values if nb of channels is less than 3
+        normalisation_values = normalisation_values * (images.shape[-1]//3) + [0.485, 0.456, 0.406][:images.shape[-1]%3]
+        second_normalisation_values = [0.229, 0.224, 0.225]
+        # add the number of channels to the normalisation values, by adding 0.225 to the list for each additional channel beyond 3, and deleting some normalisation values if nb of channels is less than 3
+        second_normalisation_values = second_normalisation_values * (images.shape[-1]//3) + [0.229, 0.224, 0.225][:images.shape[-1]%3]
         transform = transforms.Compose([    
             transforms.Resize(299),    
             transforms.CenterCrop(299),    
             transforms.ToTensor(),    
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            transforms.Normalize(normalisation_values, second_normalisation_values)
         ])
         original_shape = images.shape
         # Convert images to a tensor
@@ -521,26 +527,45 @@ class ConditionalEvaluation():
         print(embeddings.shape)
         return embeddings
     
-    def _process_images_in_batches(self,images, inception, device, batch_size):
+    def _process_images_in_batches(self, images, inception, device, batch_size):
         num_images = len(images)
         embeddings = []
-        
+
         with torch.no_grad():
             for i in range(0, num_images, batch_size):
                 batch_images = images[i:i + min(batch_size, num_images - i)]
 
-                batch_images = batch_images.to(device)
- 
-                batch_embeddings,_ = inception(batch_images)
-                batch_embeddings = batch_embeddings.detach()
+                # Handle images with different number of channels
+                if batch_images.shape[1] != 3:
+                    embeddings_per_channel = []
+                    for c in range(batch_images.shape[1]):
+                        # Expand the channel dimension to be (N, C, H, W) where C=3
+                        channel_images = batch_images[:, c:c+1].expand(-1, 3, -1, -1)
+                        channel_images = channel_images.to(device)
 
-                del batch_images
+                        channel_embeddings, _ = inception(channel_images)
+                        channel_embeddings = channel_embeddings.detach()
 
-                # transfer batch embeddings to cpu
-                batch_embeddings = batch_embeddings.cpu()
+                        del channel_images
+
+                        # transfer batch embeddings to cpu
+                        channel_embeddings = channel_embeddings.cpu()
+                        embeddings_per_channel.append(channel_embeddings)
+
+                    # Concatenate the embeddings for all channels
+                    batch_embeddings = torch.cat(embeddings_per_channel, dim=1)
+                else:
+                    batch_images = batch_images.to(device)
+
+                    batch_embeddings, _ = inception(batch_images)
+                    batch_embeddings = batch_embeddings.detach()
+
+                    del batch_images
+
+                    # transfer batch embeddings to cpu
+                    batch_embeddings = batch_embeddings.cpu()
 
                 embeddings.append(batch_embeddings)
-
 
         # Concatenate all the embeddings
         embeddings = torch.cat(embeddings, dim=0)
@@ -549,6 +574,7 @@ class ConditionalEvaluation():
         embeddings = embeddings.to(device)
 
         return embeddings
+
 
     
     def _distributional_distance_matrix(self,x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -799,11 +825,23 @@ if __name__ == '__main__':
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
-        """
-        
+
+
         # test on 5D tensors on Distributed KID
         arr1 = torch.randn(10, 100, 256, 256, 3) * 256
         arr2 = torch.randn(10, 100, 256, 256, 3) * 256
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        
+        print("5D tensors on GPU, 30 classes, aggregated with mean")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10],detailed_output=False))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+        """
+        
+        # test on 5D tensors on Distributed KID
+        arr1 = torch.randn(10, 10, 256, 256, 4) * 256
+        arr2 = torch.randn(10, 10, 256, 256, 4) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         
