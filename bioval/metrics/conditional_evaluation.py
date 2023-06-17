@@ -167,6 +167,7 @@ class ConditionalEvaluation():
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score,aggregated,detailed_output)
         #### Intra class metric
         dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score,aggregated,detailed_output)
+        dict_score = self._compute_overall_distributed_score(arr1, arr2,dict_score,aggregated)
         return dict_score
     
 
@@ -327,6 +328,31 @@ class ConditionalEvaluation():
             output['control_score'] = torch.mean(score).item()
 
 
+        return output
+    
+    def _compute_overall_distributed_score(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict,aggregated=True) -> dict:
+        """
+        Args:
+
+        arr1: A tensor representing the first set of embeddings, with shape (N,F), with N being 
+        the number of classes and F the number of features.
+        arr2: A tensor representing the second set of embeddings, with shape (N,F), with N being 
+        the number of classes and F the number of features.
+        output: A dictionary containing results of other evaluation metrics computed beforehand.
+
+        Returns:
+
+        output: A dictionary containing the results of the evaluation metric in addition to other metrics computed beforehand.
+        """        
+        if aggregated:
+            pass
+        else:
+            # change shape of arr1 from (N, I, F) to (n, F) where n = N*I
+            arr1 = arr1.reshape(-1, arr1.shape[-1])
+            # change shape of arr2 from (N, I, F) to (n, F) where n = N*I
+            arr2 = arr2.reshape(-1, arr2.shape[-1])
+            distance = self._distributed_methods[self._distributed_method](arr1, arr2)
+            output["overall_" + self._distributed_method] = distance
         return output
 
     def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None,aggregated=True,batch_size = 256) -> tuple:
@@ -524,7 +550,6 @@ class ConditionalEvaluation():
             embeddings = embeddings.reshape(original_shape[0],original_shape[1],-1 )
         elif len(original_shape) == 4:
             embeddings = embeddings.reshape(images_shape[0], -1)
-        print(embeddings.shape)
         return embeddings
     
     def _process_images_in_batches(self, images, inception, device, batch_size):
@@ -607,6 +632,7 @@ class ConditionalEvaluation():
 
 
 
+    
 
 
     
