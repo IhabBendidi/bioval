@@ -121,7 +121,7 @@ class ConditionalEvaluation():
         self._aggregate = value
 
 
-    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True,detailed_output=True,batch_size = 256) -> dict:
+    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True,detailed_output=True,batch_size = 256,percent=0.1) -> dict:
         """
         This function is used to compare two tensors and return a dictionary with the scores of each of the three metrics. 
         The comparison is performed based on the method and aggregation set for the class. 
@@ -167,7 +167,7 @@ class ConditionalEvaluation():
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score,aggregated,detailed_output)
         #### Intra class metric
         dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score,aggregated,detailed_output)
-        dict_score = self._compute_overall_distributed_score(arr1, arr2,dict_score,aggregated)
+        dict_score = self._compute_overall_distributed_score(arr1, arr2,dict_score,aggregated,percent)
         return dict_score
     
 
@@ -330,7 +330,7 @@ class ConditionalEvaluation():
 
         return output
     
-    def _compute_overall_distributed_score(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict,aggregated=True) -> dict:
+    def _compute_overall_distributed_score(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict,aggregated=True,percent=0.1) -> dict:
         """
         Args:
 
@@ -354,8 +354,8 @@ class ConditionalEvaluation():
                 arr2 = arr2.reshape(-1, arr2.shape[-1])
             else :
                 # sample uniformly 10% of instances of each class N, and convert to (n,F) where n = N*0.1
-                arr1 = self._sample_uniformly(arr1, 0.1)
-                arr2 = self._sample_uniformly(arr2, 0.1)
+                arr1 = self._sample_uniformly(arr1, percent)
+                arr2 = self._sample_uniformly(arr2, percent)
 
             distance = self._distributed_methods[self._distributed_method](arr1, arr2)
             output["overall_" + self._distributed_method] = distance
