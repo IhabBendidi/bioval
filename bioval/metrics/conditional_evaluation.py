@@ -347,10 +347,16 @@ class ConditionalEvaluation():
         if aggregated:
             pass
         else:
-            # change shape of arr1 from (N, I, F) to (n, F) where n = N*I
-            arr1 = arr1.reshape(-1, arr1.shape[-1])
-            # change shape of arr2 from (N, I, F) to (n, F) where n = N*I
-            arr2 = arr2.reshape(-1, arr2.shape[-1])
+            if self._distributed_method == "kid":
+                # change shape of arr1 from (N, I, F) to (n, F) where n = N*I
+                arr1 = arr1.reshape(-1, arr1.shape[-1])
+                # change shape of arr2 from (N, I, F) to (n, F) where n = N*I
+                arr2 = arr2.reshape(-1, arr2.shape[-1])
+            else :
+                # sample uniformly 10% of instances of each class N, and convert to (n,F) where n = N*0.1
+                arr1 = self._sample_uniformly(arr1, 0.1)
+                arr2 = self._sample_uniformly(arr2, 0.1)
+
             distance = self._distributed_methods[self._distributed_method](arr1, arr2)
             output["overall_" + self._distributed_method] = distance
         return output
@@ -699,6 +705,20 @@ class ConditionalEvaluation():
         # Return the vector-wise correlation and p-value
         return correlation, p_value
 
+    def _sample_uniformly(self,arr,percentage=0.1):
+        # sample from an aray of shape (N,I, F) uniformly along the I dimension to get a new array of shape (N, I', F), w@@here I' = I * percentage
+        # get the number of samples to be taken from each array
+        num_samples = int(arr.shape[1] * percentage)
+        # get the indices of the samples to be taken
+        indices = torch.randperm(arr.shape[1])[:num_samples]
+        # get the samples
+        arr = arr[:,indices,:]
+        # convert N,I,F to N*I,F
+        arr = arr.view(arr.shape[0]*arr.shape[1],arr.shape[2])
+        return arr
+
+
+
 
 
 
@@ -866,8 +886,8 @@ if __name__ == '__main__':
         """
         
         # test on 5D tensors on Distributed KID
-        arr1 = torch.randn(10, 10, 256, 256, 4) * 256
-        arr2 = torch.randn(10, 10, 256, 256, 4) * 256
+        arr1 = torch.randn(2, 10, 256, 256, 3) * 256
+        arr2 = torch.randn(2, 10, 256, 256, 3) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         
@@ -883,7 +903,7 @@ if __name__ == '__main__':
         #arr2 = torch.randn(30, 20, 10, 10, 3) * 256
         #arr1 = arr1.cuda(best_gpu)
         #arr2 = arr2.cuda(best_gpu)
-        print("5D tensors on GPU, 30 classes, Distributed KID")
+        print("5D tensors on GPU, 30 classes, Distributed FID")
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False,detailed_output=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
