@@ -56,9 +56,10 @@ class ConditionalEvaluation():
         self._methods = distance.get_distance_functions()
         self._distributed_methods = distance.get_distributed_distance_functions()
         self._aggregs = aggregation.get_aggregation_functions()
-        self.inception = models.inception_v3(pretrained=True)
+        self.inception = models.inception_v3(pretrained=True, transform_input=False)
+        # delete last layer of inception
         # Set the model to evaluation mode
-        self.inception.eval()
+        self.inception.fc = torch.nn.Identity()
         if self._method not in list(self._methods.keys()):
             raise ValueError(f"Method {self._method} not available. Available methods are {list(self._methods.keys())}")
         if self._distributed_method not in list(self._distributed_methods.keys()):
@@ -120,7 +121,7 @@ class ConditionalEvaluation():
         self._aggregate = value
 
 
-    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True,detailed_output=True,batch_size = 256) -> dict:
+    def __call__(self, arr1: torch.Tensor, arr2: torch.Tensor, control = None, k_range=[1, 5, 10],aggregated=True,detailed_output=True,batch_size = 256,percent=0.1) -> dict:
         """
         This function is used to compare two tensors and return a dictionary with the scores of each of the three metrics. 
         The comparison is performed based on the method and aggregation set for the class. 
@@ -166,6 +167,7 @@ class ConditionalEvaluation():
         dict_score = self._compute_interclass_scores(arr1, arr2,dict_score,aggregated,detailed_output)
         #### Intra class metric
         dict_score = self._compute_intraclass_scores(arr1, arr2,k_range,dict_score,aggregated,detailed_output)
+        dict_score = self._compute_overall_distributed_score(arr1, arr2,dict_score,aggregated,percent)
         return dict_score
     
 
@@ -327,6 +329,37 @@ class ConditionalEvaluation():
 
 
         return output
+    
+    def _compute_overall_distributed_score(self,arr1: torch.Tensor, arr2: torch.Tensor,output : dict,aggregated=True,percent=0.1) -> dict:
+        """
+        Args:
+
+        arr1: A tensor representing the first set of embeddings, with shape (N,F), with N being 
+        the number of classes and F the number of features.
+        arr2: A tensor representing the second set of embeddings, with shape (N,F), with N being 
+        the number of classes and F the number of features.
+        output: A dictionary containing results of other evaluation metrics computed beforehand.
+
+        Returns:
+
+        output: A dictionary containing the results of the evaluation metric in addition to other metrics computed beforehand.
+        """        
+        if aggregated:
+            pass
+        else:
+            if self._distributed_method == "kid":
+                # change shape of arr1 from (N, I, F) to (n, F) where n = N*I
+                arr1 = arr1.reshape(-1, arr1.shape[-1])
+                # change shape of arr2 from (N, I, F) to (n, F) where n = N*I
+                arr2 = arr2.reshape(-1, arr2.shape[-1])
+            else :
+                # sample uniformly 10% of instances of each class N, and convert to (n,F) where n = N*0.1
+                arr1 = self._sample_uniformly(arr1, percent)
+                arr2 = self._sample_uniformly(arr2, percent)
+
+            distance = self._distributed_methods[self._distributed_method](arr1, arr2)
+            output["overall_" + self._distributed_method] = distance
+        return output
 
     def _prepare_data_format(self,arr1: torch.Tensor, arr2: torch.Tensor,k_range : list,control=None,aggregated=True,batch_size = 256) -> tuple:
 
@@ -475,11 +508,17 @@ class ConditionalEvaluation():
             ValueError: If the input image shape is not 4 or 5 dimensional.
 
         """
+        normalisation_values = [0.485, 0.456, 0.406] 
+        # add the number of channels to the normalisation values, by adding 0.406 to the list for each additional channel beyond 3, and deleting some normalisation values if nb of channels is less than 3
+        normalisation_values = normalisation_values * (images.shape[-1]//3) + [0.485, 0.456, 0.406][:images.shape[-1]%3]
+        second_normalisation_values = [0.229, 0.224, 0.225]
+        # add the number of channels to the normalisation values, by adding 0.225 to the list for each additional channel beyond 3, and deleting some normalisation values if nb of channels is less than 3
+        second_normalisation_values = second_normalisation_values * (images.shape[-1]//3) + [0.229, 0.224, 0.225][:images.shape[-1]%3]
         transform = transforms.Compose([    
             transforms.Resize(299),    
             transforms.CenterCrop(299),    
             transforms.ToTensor(),    
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            transforms.Normalize(normalisation_values, second_normalisation_values)
         ])
         original_shape = images.shape
         # Convert images to a tensor
@@ -519,25 +558,45 @@ class ConditionalEvaluation():
             embeddings = embeddings.reshape(images_shape[0], -1)
         return embeddings
     
-    def _process_images_in_batches(self,images, inception, device, batch_size):
+    def _process_images_in_batches(self, images, inception, device, batch_size):
         num_images = len(images)
         embeddings = []
-        
+
         with torch.no_grad():
             for i in range(0, num_images, batch_size):
                 batch_images = images[i:i + min(batch_size, num_images - i)]
 
-                batch_images = batch_images.to(device)
- 
-                batch_embeddings = inception(batch_images).detach()
+                # Handle images with different number of channels
+                if batch_images.shape[1] != 3:
+                    embeddings_per_channel = []
+                    for c in range(batch_images.shape[1]):
+                        # Expand the channel dimension to be (N, C, H, W) where C=3
+                        channel_images = batch_images[:, c:c+1].expand(-1, 3, -1, -1)
+                        channel_images = channel_images.to(device)
 
-                del batch_images
+                        channel_embeddings, _ = inception(channel_images)
+                        channel_embeddings = channel_embeddings.detach()
 
-                # transfer batch embeddings to cpu
-                batch_embeddings = batch_embeddings.cpu()
+                        del channel_images
+
+                        # transfer batch embeddings to cpu
+                        channel_embeddings = channel_embeddings.cpu()
+                        embeddings_per_channel.append(channel_embeddings)
+
+                    # Concatenate the embeddings for all channels
+                    batch_embeddings = torch.cat(embeddings_per_channel, dim=1)
+                else:
+                    batch_images = batch_images.to(device)
+
+                    batch_embeddings, _ = inception(batch_images)
+                    batch_embeddings = batch_embeddings.detach()
+
+                    del batch_images
+
+                    # transfer batch embeddings to cpu
+                    batch_embeddings = batch_embeddings.cpu()
 
                 embeddings.append(batch_embeddings)
-
 
         # Concatenate all the embeddings
         embeddings = torch.cat(embeddings, dim=0)
@@ -546,6 +605,7 @@ class ConditionalEvaluation():
         embeddings = embeddings.to(device)
 
         return embeddings
+
 
     
     def _distributional_distance_matrix(self,x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -578,6 +638,7 @@ class ConditionalEvaluation():
 
 
 
+    
 
 
     
@@ -643,6 +704,20 @@ class ConditionalEvaluation():
 
         # Return the vector-wise correlation and p-value
         return correlation, p_value
+
+    def _sample_uniformly(self,arr,percentage=0.1):
+        # sample from an aray of shape (N,I, F) uniformly along the I dimension to get a new array of shape (N, I', F), w@@here I' = I * percentage
+        # get the number of samples to be taken from each array
+        num_samples = int(arr.shape[1] * percentage)
+        # get the indices of the samples to be taken
+        indices = torch.randperm(arr.shape[1])[:num_samples]
+        # get the samples
+        arr = arr[:,indices,:]
+        # convert N,I,F to N*I,F
+        arr = arr.view(arr.shape[0]*arr.shape[1],arr.shape[2])
+        return arr
+
+
 
 
 
@@ -796,11 +871,23 @@ if __name__ == '__main__':
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10]))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
+
+
+        # test on 5D tensors on Distributed KID
+        arr1 = torch.randn(10, 100, 256, 256, 3) * 256
+        arr2 = torch.randn(10, 100, 256, 256, 3) * 256
+        arr1 = arr1.cuda(best_gpu)
+        arr2 = arr2.cuda(best_gpu)
+        
+        print("5D tensors on GPU, 30 classes, aggregated with mean")
+        start_time = time.time()
+        print(topk(arr1, arr2, k_range=[1, 5, 10],detailed_output=False))
+        print("Time elapsed: {:.2f}s".format(time.time() - start_time))
         """
         
         # test on 5D tensors on Distributed KID
-        arr1 = torch.randn(100, 100, 256, 256, 3) * 256
-        arr2 = torch.randn(100, 100, 256, 256, 3) * 256
+        arr1 = torch.randn(2, 10, 256, 256, 3) * 256
+        arr2 = torch.randn(2, 10, 256, 256, 3) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         
@@ -816,7 +903,7 @@ if __name__ == '__main__':
         #arr2 = torch.randn(30, 20, 10, 10, 3) * 256
         #arr1 = arr1.cuda(best_gpu)
         #arr2 = arr2.cuda(best_gpu)
-        print("5D tensors on GPU, 30 classes, Distributed KID")
+        print("5D tensors on GPU, 30 classes, Distributed FID")
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False,detailed_output=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
@@ -845,9 +932,9 @@ if __name__ == '__main__':
         """
 
         # test on 4D tensors with 4D control
-        arr1 = torch.randn(100,100, 256, 256,3) * 256
-        arr2 = torch.randn(100,100, 256, 256, 3) * 256
-        control = torch.randn(100,256, 256, 3) * 256
+        arr1 = torch.randn(10,10, 256, 256,3) * 256
+        arr2 = torch.randn(10,10, 256, 256, 3) * 256
+        control = torch.randn(10,256, 256, 3) * 256
         # pass the arrays to first gpu
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
