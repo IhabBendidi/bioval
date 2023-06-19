@@ -4,8 +4,7 @@ setup(
   packages = ['bioval'],   # Chose the same as "name"
   version = '0.1.1.2-alpha',      # Start with a small number and increase it with every change you make
   license='MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
-  description = 'Bioval is a Python package made to provide a wrapper and an easy access to a collection of evaluation metrics for comparing the similarity of two tensors, adapted to different evaluation processes of generative models applied to biological images, and by extension to natural images. The package support unconditional comparison cases, in which we have no labels separating different classes/conditions, and also supports conditional comparisons, with metrics adapted to evaluating the appropriateness of the generated images to all the distributions of real conditions. The package also supports distance of generated conditions from the real negative control condition, used in most biological contexts.',   # Give a short description about your library
-  author = 'Ihab Bendidi, Ethan Cohen, Auguste Genovesio',                   # Type in your name
+  description = 'Bioval is a Python package made to provide a wrapper and an easy access to a collection of evaluation metrics for comparing the similarity of two tensors, adapted to different evaluation processes of generative models applied to biological images, and by extension to natural images.'  author = 'Ihab Bendidi, Ethan Cohen, Auguste Genovesio',                   # Type in your name
   author_email = 'bendidiihab@gmail.Com',      # Type in your E-Mail
   url = 'https://github.com/IhabBendidi/bioval',   # Provide either the link to your github or to your website
   download_url = 'https://github.com/IhabBendidi/bioval/archive/refs/tags/v0.1.1-alpha.tar.gz',    # I explain this later on
