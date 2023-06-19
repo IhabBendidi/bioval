@@ -142,6 +142,9 @@ arr2 = torch.randn(100, 10, 256, 256, 5)
 # control array with 10 images and 3 channels
 control = torch.randn(10, 256, 256, 3)
 
+# control array with 10 images and 5 channels
+control = torch.randn(10, 256, 256, 5) # If control has 5 channels, array_1 and array_2 must also have 5 channels
+
 # control array with 1 image and 3 channels
 control = torch.randn(256, 256, 3)
 
