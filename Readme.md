@@ -1,11 +1,7 @@
 # Bioval
 Bioval is a Python package made to provide a wrapper and an easy access to a collection of evaluation metrics for comparing the similarity of two tensors, adapted to different evaluation processes of generative models applied to biological images, and by extension to natural images. The package support unconditional comparison cases, in which we have no labels separating different classes/conditions, and also supports conditional comparisons, with metrics adapted to evaluating the appropriateness of the generated images to all the distributions of real conditions. The package also supports distance of generated conditions from the real negative control condition, used in most biological contexts.
 
-The package supports both images (with any number of channels) and encoded features of images.
-
-The compared tensors need to have the same shape.
-
-This package performs encoding of images using the InceptionV3 encoder pretrained on ImageNet dataset, but can also handle features encoded using different encoders.
+The package supports both images (with any number of channels) and encoded features of images. The compared tensors need to have the same shape. This package performs encoding of images using the InceptionV3 encoder pretrained on ImageNet dataset, but can also handle features encoded using different encoders.
 
 ## Installation
 
