@@ -3,6 +3,28 @@ Bioval is a Python package made to provide a wrapper and an easy access to a col
 
 The package supports both images (with any number of channels) and encoded features of images. The compared tensors need to have the same shape. This package performs encoding of images using the InceptionV3 encoder pretrained on ImageNet dataset, but can also handle features encoded using different encoders.
 
+
+## Table of Content
+- [Bioval](#bioval)
+  * [Installation](#installation)
+    + [Installation from Pypip](#installation-from-pypip)
+    + [Installation from source](#installation-from-source)
+  * [Available Metrics](#available-metrics)
+    + [Overall KID/FID](#overall-kid-fid)
+    + [Intraclass KID/FID](#intraclass-kid-fid)
+    + [IntraClass Conditional Evaluation](#intraclass-conditional-evaluation)
+    + [InterClass Conditional Evaluation](#interclass-conditional-evaluation)
+    + [Distance from Control](#distance-from-control)
+  * [Usage settings](#usage-settings)
+    + [Aggregated](#aggregated)
+    + [Distributed](#distributed)
+  * [Quick Usage](#quick-usage)
+    + [Object Instanciation](#object-instanciation)
+    + [Input tensors](#input-tensors)
+    + [Aggregated Usage of the metrics](#aggregated-usage-of-the-metrics)
+  * [Contributing](#contributing)
+  * [License](#license)
+
 ## Installation
 
 ### Installation from Pypip
