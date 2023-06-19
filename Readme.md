@@ -215,4 +215,4 @@ Output is a dictionary with all the computed metrics, and the same no matter the
 Contributions are welcome! Please refer to the [Contribute](https://github.com/IhabBendidi/bioval/blob/main/Contribute.md) file for details on how to contribute to Bioval.
 
 ## License
-Bioval is licensed under the MIT License. Please refer to the [License]() file for details.
+Bioval is licensed under the MIT License. Please refer to the [License](https://github.com/IhabBendidi/bioval/blob/main/LICENSE) file for details.
