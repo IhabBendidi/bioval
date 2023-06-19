@@ -130,6 +130,25 @@ arr2 = torch.randn(100, 10, 256, 256, 3)
 # in each condition of size 256x256x5 with 5 channels)
 arr1 = torch.randn(100, 10, 256, 256, 5)
 arr2 = torch.randn(100, 10, 256, 256, 5)
+
+
+# control array is a torch.Tensor object of shape (I, H, W, C) or 
+# (H, W, C) or (I, F) or (F), where C is the number of channels, 
+# H is the height, and W is the width of the input image, and 
+# I the number of instances, and F is the number of features.
+
+# control array with 10 images and 3 channels
+control = torch.randn(10, 256, 256, 3)
+
+# control array with 1 image and 3 channels
+control = torch.randn(256, 256, 3)
+
+# control array with 10 images and an embedding of size 1024
+control = torch.randn(10, 1024)
+
+# control array with 1 image and an embedding of size 1024
+control = torch.randn(1024)
+
 ```
 
 In the case where nb of channels in input images differs from 3 channels, each channel is encoded separately, and the embeddings of each channel are concatenated into one embedding. For example, if the input images have 5 channels, the output embedding will be of size 5*embedding_size.
