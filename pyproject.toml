@@ -16,6 +16,10 @@ piq = "*"
 pot = "*"
 scikit-learn = "*"
 
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+packages = [
+    { include = "bioval" },
+]
