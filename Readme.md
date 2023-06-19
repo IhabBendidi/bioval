@@ -161,18 +161,18 @@ In the case where nb of channels in input images differs from 3 channels, each c
 
 ### Aggregated Usage of the metrics
 
-Computing all the metrics for our input tensors can be done using our created instance of our object, and passing the input tensors to it. 
+Computing all the metrics for our input tensors can be done using our created instance of our object, and passing the input tensors to it. The first and second arrays are mandatory inputs with no default values.
 
 ```python
 
-output = topk(arr1, arr2, k_range=[1, 5, 10, 20, 50, 100])
+output = topk(arr1, arr2)
 ```
 
 The Object instance can be called with the following parameters:
 
-- arr1: The first input tensor. Can be of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where N is the number of classes/conditions, I is the number of instances, H is the height, W is the width, C is the number of channels, and F is the number of features.
+- arr1: The first input tensor, and a mandatory input. Can be of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where N is the number of classes/conditions, I is the number of instances, H is the height, W is the width, C is the number of channels, and F is the number of features.
 
-- arr2: The second input tensor. Can be of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where N is the number of classes/conditions, I is the number of instances, H is the height, W is the width, C is the number of channels, and F is the number of features. Array 1 and Array 2 must have the same shape.
+- arr2: The second input tensor, and a mandatory input. Can be of shape (N, I, H, W, C) or (N, H, W, C) or (N, I, F) or (N, F), where N is the number of classes/conditions, I is the number of instances, H is the height, W is the width, C is the number of channels, and F is the number of features. Array 1 and Array 2 must have the same shape.
 
 - control: The control tensor. Default is None when the distance from control metric is not of desired. When not None, it is a torch.Tensor object of shape (I, H, W, C) or (H, W, C) or (I, F) or (F), where C is the number of channels, H is the height, and W is the width of the input image, and I the number of instances, and F is the number of features.
 
