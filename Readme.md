@@ -5,14 +5,6 @@ The package supports both images (with any number of channels) and encoded featu
 
 ## Installation
 
-### Installation from source
-Bioval can be built using the following command (from the root of this package):
-
-```bash
-poetry build
-pip install dist/bioval-{version_number}.tar.gz
-```
-
 ### Installation from Pypip
 
 You can install the current alpha version through the command :
@@ -21,7 +13,13 @@ You can install the current alpha version through the command :
 pip install bioval
 ```
 
-pip install bioval
+### Installation from source
+Bioval can be built using the following command (from the root of this package):
+
+```bash
+poetry build
+pip install dist/bioval-{version_number}.tar.gz
+```
 
 ## Available Metrics
 The following evaluation metrics are available in Bioval:
