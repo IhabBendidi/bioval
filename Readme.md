@@ -5,7 +5,7 @@ The package supports both images (with any number of channels) and encoded featu
 
 The compared tensors need to have the same shape.
 
-This package supports encoding of images using the InceptionV3 encoder pretrained on ImageNet dataset, but can also handle features encoded using different encoders.
+This package performs encoding of images using the InceptionV3 encoder pretrained on ImageNet dataset, but can also handle features encoded using different encoders.
 
 ## Installation
 
