@@ -10,12 +10,18 @@ Bioval can be built using the following command (from the root of this package):
 
 ```bash
 poetry build
-pip3 install dist/bioval-{version_number}.tar.gz
+pip install dist/bioval-{version_number}.tar.gz
 ```
 
 ### Installation from Pypip
 
-Pypip installation will be supported soon.
+You can install the current alpha version through the command :
+
+```bash
+pip install bioval
+```
+
+pip install bioval
 
 ## Available Metrics
 The following evaluation metrics are available in Bioval:
