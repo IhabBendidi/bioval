@@ -200,7 +200,7 @@ The Object instance can be called with the following parameters:
 
 - aggregated : Whether to use the aggregated (if True) or distributed metrics (if False). Default is True.
 
-- detailed : Whether to return the detailed results of the metrics (if True) or not (if False). Default is True.
+- detailed_output : Whether to return the detailed results of the metrics (if True) or not (if False). Default is True.
 
 - batch_size : The batch size to use for the encoding of the input images, to avoid out of memory issues. Default is 256.
 
