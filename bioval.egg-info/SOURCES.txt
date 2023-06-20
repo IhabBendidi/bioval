@@ -1,0 +1,9 @@
+LICENSE.txt
+pyproject.toml
+setup.cfg
+setup.py
+bioval.egg-info/PKG-INFO
+bioval.egg-info/SOURCES.txt
+bioval.egg-info/dependency_links.txt
+bioval.egg-info/requires.txt
+bioval.egg-info/top_level.txt

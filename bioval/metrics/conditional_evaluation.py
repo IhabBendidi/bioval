@@ -886,8 +886,8 @@ if __name__ == '__main__':
         """
         
         # test on 5D tensors on Distributed KID
-        arr1 = torch.randn(2, 10, 256, 256, 3) * 256
-        arr2 = torch.randn(2, 10, 256, 256, 3) * 256
+        arr1 = torch.randn(2, 10, 256, 256, 5) * 256
+        arr2 = torch.randn(2, 10, 256, 256, 5) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         

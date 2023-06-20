@@ -1,0 +1,19 @@
+Metadata-Version: 2.1
+Name: bioval
+Version: 0.1.1.3a0
+Summary: Bioval is a Python package made to provide a wrapper and an easy access to a collection of evaluation metrics for comparing the similarity of two tensors, adapted to different evaluation processes of generative models applied to biological images.
+Home-page: https://github.com/IhabBendidi/bioval
+Download-URL: https://github.com/IhabBendidi/bioval/archive/refs/tags/v0.1.1.3-alpha.tar.gz
+Author: Ihab Bendidi, Ethan Cohen, Auguste Genovesio
+Author-email: bendidiihab@gmail.Com
+License: MIT
+Keywords: biology,evaluation,generative models
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Build Tools
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.4
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+License-File: LICENSE.txt
