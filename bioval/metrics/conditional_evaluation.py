@@ -56,7 +56,7 @@ class ConditionalEvaluation():
         self._methods = distance.get_distance_functions()
         self._distributed_methods = distance.get_distributed_distance_functions()
         self._aggregs = aggregation.get_aggregation_functions()
-        self.inception = models.inception_v3(pretrained=True, transform_input=False)
+        self.inception = models.inception_v3(weights=models.Inception_V3_Weights.IMAGENET1K_V1, transform_input=False)
         # delete last layer of inception
         # Set the model to evaluation mode
         self.inception.fc = torch.nn.Identity()
