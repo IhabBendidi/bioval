@@ -1,0 +1,8 @@
+numpy
+torch
+torchvision
+Pillow
+nvidia-ml-py
+piq
+pot
+scikit-learn

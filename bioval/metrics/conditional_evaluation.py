@@ -56,7 +56,7 @@ class ConditionalEvaluation():
         self._methods = distance.get_distance_functions()
         self._distributed_methods = distance.get_distributed_distance_functions()
         self._aggregs = aggregation.get_aggregation_functions()
-        self.inception = models.inception_v3(pretrained=True, transform_input=False)
+        self.inception = models.inception_v3(weights=models.Inception_V3_Weights.IMAGENET1K_V1, transform_input=False)
         # delete last layer of inception
         # Set the model to evaluation mode
         self.inception.fc = torch.nn.Identity()
@@ -508,6 +508,12 @@ class ConditionalEvaluation():
             ValueError: If the input image shape is not 4 or 5 dimensional.
 
         """
+        original_transform = transform = transforms.Compose([    
+            transforms.Resize(299),    
+            transforms.CenterCrop(299),    
+            transforms.ToTensor(),    
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
         normalisation_values = [0.485, 0.456, 0.406] 
         # add the number of channels to the normalisation values, by adding 0.406 to the list for each additional channel beyond 3, and deleting some normalisation values if nb of channels is less than 3
         normalisation_values = normalisation_values * (images.shape[-1]//3) + [0.485, 0.456, 0.406][:images.shape[-1]%3]
@@ -541,8 +547,46 @@ class ConditionalEvaluation():
         images = images.cpu()
         images = images.numpy()
         images = images.astype(np.uint8)
-        images = [Image.fromarray(image.astype(np.uint8)) for image in images]
-        images = torch.stack([transform(image) for image in images])
+        # if nb of channels is 3, convert the images to PIL images
+        if images.shape[-1] == 3:
+            images = [Image.fromarray(image.astype(np.uint8)) for image in images]
+            images = torch.stack([original_transform(image) for image in images])
+        # if nb of channels is 1, convert the images to PIL images
+        elif images.shape[-1] == 1:
+            images = [Image.fromarray(image.astype(np.uint8).squeeze()) for image in images]
+            images = torch.stack([transform(image) for image in images])
+        # if nb of channels is 4, convert the images to PIL images
+        elif images.shape[-1] == 4:
+            images = [Image.fromarray(image.astype(np.uint8)) for image in images]
+            images = torch.stack([transform(image) for image in images])
+            # if nb of channels is different from these values, convert each channel to an image and then stack them together
+        else:
+            final_images = []
+            for c in range(images.shape[-1]):
+                # extract the channel
+                channel_images = images[:, :, :, c]
+                # convert 1 channel images to 3 channels images by duplicating the channel 3 times
+                channel_images = np.stack([channel_images, channel_images, channel_images], axis = -1)
+                channel_images = channel_images.astype(np.uint8)
+                
+                # convert the channel to PIL images
+                channel_images = [Image.fromarray(image.astype(np.uint8)) for image in channel_images]
+                # stack the channel images together
+                channel_images = torch.stack([original_transform(image) for image in channel_images])
+                # deduplicate the channels to get back to 1 channel images
+                channel_images = channel_images[:, 0, :, :]
+                
+                # append the channel images to the final images list
+                final_images.append(channel_images)
+
+                        
+
+            # stack the final images together
+            images = torch.stack(final_images, dim = -1)
+            # convert  (N, H, W, C) to (N, C, H, W) 
+            images = images.permute(0, 3, 1, 2)
+        
+        
 
         images_shape = images.shape
         
@@ -886,8 +930,8 @@ if __name__ == '__main__':
         """
         
         # test on 5D tensors on Distributed KID
-        arr1 = torch.randn(2, 10, 256, 256, 3) * 256
-        arr2 = torch.randn(2, 10, 256, 256, 3) * 256
+        arr1 = torch.randn(30, 10, 256, 256, 1) * 256
+        arr2 = torch.randn(30, 10, 256, 256, 1) * 256
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
         
@@ -903,7 +947,7 @@ if __name__ == '__main__':
         #arr2 = torch.randn(30, 20, 10, 10, 3) * 256
         #arr1 = arr1.cuda(best_gpu)
         #arr2 = arr2.cuda(best_gpu)
-        print("5D tensors on GPU, 30 classes, Distributed FID")
+        print("5D tensors on GPU, 30 classes, Distributed KID")
         start_time = time.time()
         print(topk(arr1, arr2, k_range=[1, 5, 10],aggregated=False,detailed_output=False))
         print("Time elapsed: {:.2f}s".format(time.time() - start_time))
@@ -932,9 +976,9 @@ if __name__ == '__main__':
         """
 
         # test on 4D tensors with 4D control
-        arr1 = torch.randn(10,10, 256, 256,3) * 256
-        arr2 = torch.randn(10,10, 256, 256, 3) * 256
-        control = torch.randn(10,256, 256, 3) * 256
+        arr1 = torch.randn(10,10, 256, 256,1) * 256
+        arr2 = torch.randn(10,10, 256, 256, 1) * 256
+        control = torch.randn(10,256, 256, 1) * 256
         # pass the arrays to first gpu
         arr1 = arr1.cuda(best_gpu)
         arr2 = arr2.cuda(best_gpu)
