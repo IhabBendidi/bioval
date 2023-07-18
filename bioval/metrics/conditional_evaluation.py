@@ -607,6 +607,7 @@ class ConditionalEvaluation():
         embeddings = []
 
         with torch.no_grad():
+            inception.eval()
             for i in range(0, num_images, batch_size):
                 batch_images = images[i:i + min(batch_size, num_images - i)]
 
@@ -618,7 +619,7 @@ class ConditionalEvaluation():
                         channel_images = batch_images[:, c:c+1].expand(-1, 3, -1, -1)
                         channel_images = channel_images.to(device)
 
-                        channel_embeddings, _ = inception(channel_images)
+                        channel_embeddings = inception(channel_images)
                         channel_embeddings = channel_embeddings.detach()
 
                         del channel_images
@@ -632,14 +633,13 @@ class ConditionalEvaluation():
                 else:
                     batch_images = batch_images.to(device)
 
-                    batch_embeddings, _ = inception(batch_images)
+                    batch_embeddings = inception(batch_images)
                     batch_embeddings = batch_embeddings.detach()
 
                     del batch_images
 
                     # transfer batch embeddings to cpu
                     batch_embeddings = batch_embeddings.cpu()
-
                 embeddings.append(batch_embeddings)
 
         # Concatenate all the embeddings
