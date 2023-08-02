@@ -4,6 +4,7 @@ version = "0.1.1.6-alpha"
 description = "Bioval is a Python package made to provide a wrapper and an easy access to a collection of evaluation metrics for comparing the similarity of two tensors, adapted to different evaluation processes of generative models applied to biological images."
 authors = ["Ihab Bendidi <bendidiihab@gmail.com>"]
 readme = "Readme.md"
+packages = [{ include = "bioval" }]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -20,6 +21,3 @@ scikit-learn = "*"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-packages = [
-    { include = "bioval" },
-]
